@@ -121,7 +121,7 @@
   font-weight:900;
 }
 
-:root{ --astro-version: "v1.0.0"; }  /* バージョン */
+:root{ --astro-version: "v1.0.1"; }  /* バージョン */
 
 #howtoOverlay .howto-panel{
   position: relative !important;
@@ -1464,13 +1464,18 @@ function drawBackground(){
   initBackground(); // v2.7 Fix2 G5: prepare starfield
 
   /*** ===== Storage ===== ***/
-  const HS_KEY="astrovader_highscore", PS_KEY="astrovader_prevscore";
-  const HM_KEY="astrovader_highmult",  PM_KEY="astrovader_prevmult";
-  const loadNum=(k)=>{try{return parseInt(localStorage.getItem(k)||"0",10)||0;}catch{return 0;}};
-  const saveNum=(k,v)=>{ try{ localStorage.setItem(k, String(v)); }catch{} };
-  let highScore=loadNum(HS_KEY), prevScore=loadNum(PS_KEY);
-  let highMult=loadNum(HM_KEY),  prevMult=loadNum(PM_KEY);
-  const pad6=(n)=>n.toString().padStart(6,"0");
+const GAME_ID = "astrovader";
+const K = n => `av_${GAME_ID}_${n}`;
+
+const HS_KEY = K("highscore"), PS_KEY = K("prevscore");
+const HM_KEY = K("highmult"),  PM_KEY = K("prevmult");
+
+const loadNum = k => { try { return parseInt(localStorage.getItem(k) || "0", 10) || 0; } catch { return 0; } };
+const saveNum = (k,v) => { try { localStorage.setItem(k, String(v)); } catch {} };
+
+let highScore = loadNum(HS_KEY), prevScore = loadNum(PS_KEY);
+let highMult  = loadNum(HM_KEY),  prevMult  = loadNum(PM_KEY);
+const pad6 = n => n.toString().padStart(6,"0");
 
   /*** ===== Audio ===== ***/
   const SFX = (() => {
@@ -2312,13 +2317,14 @@ f.life = Math.min(Math.max(f.life, CYAN_MIN_LIFE), (typeof FRAG_LIFETIME!=='unde
     BGM.stop();
 
     const isNewHigh = score>highScore; prevScore=score; prevMult=multiplier;
-    try{ saveNum("astrovader_prevscore", String(prevScore)); }catch{}
-    try{ saveNum("astrovader_prevmult", String(prevMult));  }catch{}
+    saveNum(PS_KEY, prevScore);
+    saveNum(PM_KEY, prevMult);
+
     if(isNewHigh){
-      highScore=score; highMult=multiplier;
-      try{ saveNum("astrovader_highscore", String(highScore)); }catch{}
-      try{ saveNum("astrovader_highmult", String(highMult));  }catch{}
-      runHighBroken=true;
+      highScore = score; highMult = multiplier;
+      saveNum(HS_KEY, highScore);
+      saveNum(HM_KEY, highMult);
+      runHighBroken = true;
     }
     blockGameOverInputUntil = logicMs + 1000;
     SFX.gameOverBoom();
