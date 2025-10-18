@@ -157,11 +157,30 @@
 </style>
 
 <style>
-  .rows {
-    display: grid;
-    justify-content: center;
-    gap: 24px;
-  }
+.rows{
+  width: min(980px, calc(100vw - 48px));
+  margin: 0 auto;
+  display: grid;
+  gap: 36px;
+}
+
+.row{
+  display: grid;
+  grid-template-columns: 1fr var(--btn-w, 320px); /* 右列の幅を共通化 */
+  align-items: center;
+  column-gap: 24px;
+  width: 100%;
+}
+
+/* 左右揃え */
+.title{ justify-self: start; text-align: left; }
+.play-btn{ justify-self: end; width: 100%; text-align: center; }
+
+.row{
+  grid-template-columns: 2.5fr 0.8fr;
+}
+.play-btn{ width:100%; }
+
 </style>
 
 </head>
@@ -178,21 +197,25 @@
 <main class="main">
   <div class="rows">
 
-    <div class="row"
-         style="--btn-bg:#fff; --btn-fg:#000; --btn-border:#fff;">
-      <div class="title">Astrovader　</div>
-      <a class="play-btn" href="./Astrovader.html" role="button">Play</a>
-    </div>
+<div class="row"
+     style="--btn-bg:#fff; --btn-fg:#000; --btn-border:#fff;">
+  <div class="title">Astrovader</div>
+  <a class="play-btn" href="./Astrovader.html" role="button">Play</a>
+</div>
 
-    <div class="row" style="--btn-bg:#f10; --btn-fg:#000; --btn-border:#f10;">
-　　  <div class="title">Astrovader <span class="t-stroke t1">FURY MODE</span></div>
-　　  <a class="play-btn" href="./Astrovader FURY MODE.html" role="button">Play</a>
-    </div>
+<!-- 2行目：FURY MODE（赤ストローク斜体）, 赤ボタン -->
+<div class="row"
+     style="--btn-bg:#f10; --btn-fg:#000; --btn-border:#f10;">
+  <div class="title">Astrovader <span class="t-stroke t1">FURY MODE</span></div>
+  <a class="play-btn" href="./Astrovader_FURY.html" role="button">Play</a>
+</div>
 
-    <div class="row" style="--btn-bg:#00d5ff; --btn-fg:#001218; --btn-border:#00d5ff;">
-　　  <div class="title">Astrovader <span class="t-stroke t2">Reflection</span></div>
- 　　 <a class="play-btn" href="./Astrovader Reflection.html" role="button">Play</a>
-    </div>
+<!-- 3行目：Reflection（白ストローク）, シアンボタン -->
+<div class="row"
+     style="--btn-bg:#17cbe3; --btn-fg:#000; --btn-border:#17cbe3;">
+  <div class="title">Astrovader <span class="t-stroke t2">Reflection</span></div>
+  <a class="play-btn" href="./Astrovader_Reflection.html" role="button">Play</a>
+</div>
 
   </div>
 </main>
