@@ -24,13 +24,13 @@
   }
   .brand {
     font-family: -apple-system, Arial Black, Arial, Helvetica, sans-serif;
-    font-size: clamp(30px, 4.6vw, 48px); /* bigger */
+    font-size: clamp(30px, 4.6vw, 48px);
     letter-spacing: 0.5px;
     line-height:1;
     white-space: nowrap;
   }
-  .brand .r { color:#cc0000; }  /* updated red */
-  .brand .g { color:#006600; }  /* updated green */
+  .brand .r { color:#cc0000; } 
+  .brand .g { color:#006600; } 
 
   /* Main */
   .main {
@@ -42,7 +42,7 @@
     margin: 0 auto;
     display: flex;
     align-items: center;
-    justify-content: center; /* center the title and button as a group */
+    justify-content: center; 
     gap: 8px;
   }
   .title {
@@ -56,7 +56,7 @@
     min-width: 160px; height: 60px;
     padding: 0 22px;
     background:#17cbe3; color:#000;
-    font-weight: 700;        /* Arial Bold */
+    font-weight: 700; 
     font-family: -apple-system, Arial, Helvetica, sans-serif;
     font-size: clamp(22px, 2.6vw, 30px);
     transition: transform .06s ease, filter .06s ease;
@@ -166,13 +166,12 @@
 
 .row{
   display: grid;
-  grid-template-columns: 1fr var(--btn-w, 320px); /* 右列の幅を共通化 */
+  grid-template-columns: 1fr var(--btn-w, 320px);
   align-items: center;
   column-gap: 24px;
   width: 100%;
 }
 
-/* 左右揃え */
 .title{ justify-self: start; text-align: left; }
 .play-btn{ justify-self: end; width: 100%; text-align: center; }
 
@@ -203,18 +202,16 @@
   <a class="play-btn" href="./Astrovader.html" role="button">Play</a>
 </div>
 
-<!-- 2行目：FURY MODE（赤ストローク斜体）, 赤ボタン -->
 <div class="row"
      style="--btn-bg:#f10; --btn-fg:#000; --btn-border:#f10;">
   <div class="title">Astrovader <span class="t-stroke t1">FURY MODE</span></div>
-  <a class="play-btn" href="./Astrovader_FURY.html" role="button">Play</a>
+  <a class="play-btn" href="./Astrovader FURY MODE.html" role="button">Play</a>
 </div>
 
-<!-- 3行目：Reflection（白ストローク）, シアンボタン -->
 <div class="row"
      style="--btn-bg:#17cbe3; --btn-fg:#000; --btn-border:#17cbe3;">
   <div class="title">Astrovader <span class="t-stroke t2">Reflection</span></div>
-  <a class="play-btn" href="./Astrovader_Reflection.html" role="button">Play</a>
+  <a class="play-btn" href="./Astrovader Reflection.html" role="button">Play</a>
 </div>
 
   </div>
@@ -229,7 +226,6 @@
 
 
 
-  <!-- X -->
   <a class="x-link" href="https://x.com/RyoSatoAnime" aria-label="X profile">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 4 L20 20 M20 4 L4 20" />
