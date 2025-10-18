@@ -1,0 +1,2772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport"
+  content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Astrovader Reflection</title>
+<style>
+
+  :root { color-scheme: dark; }
+  html,body{
+    margin:0; background:#000; color:#fff;
+    font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Yu Gothic", Arial, sans-serif;
+  }
+
+  /* iOS：長押しメニュー/選択/ハイライト抑止 */
+  html, body, canvas, button, .square-btn, .pad, .reflectBtn, .topbar,
+  .arrow, .icon, svg, svg * { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+  * { -webkit-tap-highlight-color: transparent; }
+
+  .page{
+    max-width: 820px; margin: 0 auto; padding: 10px 10px 18px;
+    display:flex; flex-direction:column; align-items:center; gap:10px;
+  }
+
+  .topbar{ width:100%; display:none; justify-content:space-between; align-items:center; gap:10px; }
+  .square-btn{ width:68px; height:68px; border:2px solid #fff; border-radius:12px;
+    display:grid; place-items:center; background:transparent; color:#fff; cursor:pointer; touch-action:manipulation; user-select:none; }
+  .square-btn:active{ transform: translateY(1px); }
+  .icon{ width:38px; height:38px; display:block; }
+  .icon svg{ width:100%; height:100%; stroke:#fff; fill:none; stroke-width:2.2; }
+  .square-btn.muted .slash{ display:block; }
+  .slash{ display:none; }
+
+  .stageWrap{ width:100%; display:flex; justify-content:center; }
+  canvas#game{ border:1px solid #fff; display:block; width:600px; height:auto;
+    image-rendering: pixelated; background:#000; touch-action:none; outline:none; }
+
+  #controls{ width:600px; max-width:100%; margin-top:6px;
+    display:flex; align-items:center; justify-content:center; gap:8px; white-space:nowrap;
+    font:14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select:none; }
+
+  .pad{
+    width:100%;
+    margin-top:10px;
+    display:none;
+    grid-template-columns: 1fr auto 1fr;
+    column-gap:10px;
+  }
+
+  @media (pointer: coarse), (max-width: 820px){
+    .topbar{ display:flex; }
+    .pad{ display:grid; }
+    #controls, .hint{ display:none; }
+    canvas#game{ width:min(96vmin, 100%); }
+  }
+
+  .pad .half{ height: 88px; border:2px solid #fff; border-radius:14px;
+    display:grid; place-items:center; background:transparent; touch-action:manipulation; user-select:none; }
+  .pad .half:active, .reflectBtn:active{ transform: translateY(1px); }
+  .arrow{ width:44px; height:44px; }
+  .arrow svg{ width:100%; height:100%; stroke:#fff; fill:none; stroke-width:3; }
+
+  .reflectBtn{ height: 88px; aspect-ratio:1/1; border:2px solid #fff; border-radius:14px;
+    background:#000; display:grid; place-items:center; position:relative; overflow:hidden; }
+  .reflectBtn canvas{ width:100%; height:100%; display:block; }
+
+  .hint{ width:100%; text-align:center; opacity:.85; font:13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select:none; }
+
+  /* 予期しないズーム/ジェスチャ抑止（ボタン含む） */
+  canvas#game,
+  .square-btn,
+  .pad .half,
+  .reflectBtn {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+.howtoBar{ width:600px; max-width:100%; margin:6px auto 4px; text-align:center; color:#fff; }
+.howtoBar .label{ font-family:"Arial Black", Arial, Helvetica, sans-serif; font-weight:900; font-size:16px; line-height:1.1; }
+@media (pointer: coarse){ .howtoBar{ display:none; } }
+.topbar .label{ font-family:"Arial Black", Arial, Helvetica, sans-serif; font-weight:900; font-size:18px; line-height:1; color:#fff; }
+@media (pointer: coarse){
+  .topbar{ display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .topbar #btnTitle{ flex:0 0 auto; }
+  .topbar #btnMute{ flex:0 0 auto; }
+  .topbar #btnHowto{ flex:1 1 auto; }
+}
+@media (pointer: fine){ .topbar{ display:none; } }
+#controls #ctrlSpeaker .slash{ display:none; }
+#controls.muted #ctrlSpeaker .slash, #controls #ctrlSpeaker.muted .slash{ display:block; }
+#controls.bgmOff #ctrlNote .slash{ display:block; }
+
+#btnMute .iconMobileSpeaker .slash{ display:none; }
+#btnMute.muted .iconMobileSpeaker .slash{ display:block; }
+
+/* === HowTo overlay === */
+#howtoOverlay{
+  display:none; position:fixed; inset:0; z-index:9999;
+  background:rgba(0,0,0,0.92); color:#fff;
+  -webkit-backdrop-filter:saturate(110%) blur(0px);
+  backdrop-filter:saturate(110%) blur(0px);
+}
+.howto-panel{
+  box-sizing:border-box;
+  width: auto;
+  margin: 0 auto;
+  background:rgba(0,0,0,0.55);
+  border:2px solid #fff; border-radius:12px;
+  padding:28px 22px 24px;
+  /* PCで全体を30px右に寄せる */
+  transform: none;
+}
+.howto-title{
+  margin: 0 0 10px;
+  font-family: "Arial Black", Impact, system-ui, sans-serif;
+  text-align:center;
+  line-height:1.05;
+  font-weight:900;
+}
+
+:root{ --astro-version: "Reflection v1.0.0"; }  /* バージョン */
+
+#howtoOverlay .howto-panel{
+  position: relative !important;
+  overflow: visible !important;
+}
+
+#howtoOverlay .howto-panel::after{
+  content: var(--astro-version);
+  position: absolute;
+  right: 8px;
+  bottom: -18px;
+  display: block;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  opacity: .6;
+  pointer-events: none;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  z-index: 1;
+}
+
+
+/* === HowTo title: copy & sizing override (do not change panel width) === */
+.howto-title{
+
+  max-width: 28ch;
+  margin: 0 auto 10px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.howto-title.en{ font-size:21px !important; }
+.howto-title.ja{ font-size:18px !important; }
+
+.howto-pre{
+  margin: 16px auto 0;
+  white-space: pre-wrap;
+  line-height:1.45;
+  font-family: system-ui, "Hiragino Kaku Gothic ProN", "Yu Gothic", Arial, sans-serif;
+}
+.howto-actions{
+  display:grid; place-items:center; margin-top:20px;
+}
+.howto-close{
+  padding:10px 22px; font-size:18px; border:2px solid #fff; border-radius:10px;
+  background:transparent; color:#fff; cursor:pointer;
+}
+
+/* PC（マウス/広め画面）*/
+@media (pointer: fine) and (min-width:821px){
+  #howtoOverlay{ padding-top:55px; }
+  #howtoOverlay .frame{ grid-template-rows: auto 1fr 0; }
+  .howto-panel{ margin:0 auto; width:fit-content; max-width:86vw; transform:none; }
+  .howto-title{ font-size:44px; }
+  .howto-pre.en{ font-size:18px; }
+  .howto-pre.ja{ font-size:18px; }
+}
+
+/* モバイル：スクロール無しを最優先で縮小 */
+@media (pointer: coarse), (max-width: 820px){
+  .howto-panel{ width:min(95vw, 680px); padding:24px 18px 20px; }
+  .howto-title{ font-size:34px; }
+  /* 文字を小さめにして1画面に収める */
+  .howto-pre.en{ font-size:16px; }
+  .howto-pre.ja{ font-size:16px; }
+}
+
+/* 安全マージン：上下中央配置＆はみ出し防止 */
+#howtoOverlay .frame{
+  min-height:100%;
+  display:grid;
+  grid-template-rows: 1fr auto 1fr;
+  justify-items:center;
+}
+#howtoOverlay .spacer{ height: clamp(8px, 3vmin, 24px); }
+
+/* さらに縦が極端に短い機種では微縮小 */
+@media (max-height: 640px){
+  .howto-title{ font-size: clamp(26px, 6vh, 32px); }
+  .howto-pre.en, .howto-pre.ja{ font-size: clamp(13px, 2.6vh, 15px); }
+}
+
+#howtoOverlay{ cursor:pointer; }
+.howto-title.ja{ margin-top:18px; }
+.howto-footer{ margin-top:16px; text-align:center; font-size:14px; opacity:.9; }
+
+/* === PC top-position override (force) === */
+@media (pointer: fine) and (min-width:821px){
+  #howtoOverlay{ padding-top:76px !important; }
+  #howtoOverlay .frame{
+    grid-template-rows: auto 1fr 0 !important;
+    align-content: start !important;
+  }
+  #howtoOverlay .howto-panel{
+    align-self: start !important;
+    margin-top: 0 !important;
+  }
+}
+
+</style>
+<!-- BEGIN SQAudioEngine (ready) v2.96 inline -->
+<script>
+/* sq_audio_game_core_ready.js (inlined) */
+
+(function(global){
+  function SQAudioEngine(options){
+    'use strict';
+    options = options || {};
+    const MIX = {
+      master: options.volume != null ? options.volume : 0.6,
+      bass:   options.mix && options.mix.bass   != null ? options.mix.bass   : 0.90,
+      drums:  options.mix && options.mix.drums  != null ? options.mix.drums  : 0.90,
+      leadA:  options.mix && options.mix.leadA  != null ? options.mix.leadA  : 0.90,
+      leadB:  options.mix && options.mix.leadB  != null ? options.mix.leadB  : 0.90,
+      back2:  options.mix && options.mix.back2  != null ? options.mix.back2  : 0.90,
+      back1:  options.mix && options.mix.back1  != null ? options.mix.back1  : 0.85
+    };
+    let onEnded = null;
+
+
+const TRACKS = {};
+const PATCH_QUEUE = [];
+function onTrack(id, fn){ if(TRACKS[id]) fn(TRACKS[id]); else PATCH_QUEUE.push(()=>fn(TRACKS[id])); }
+function flushPatches(){ PATCH_QUEUE.splice(0).forEach(fn=>fn()); }
+
+
+  // ---- Bass ----
+  const SQMerge_BASS = {
+    id: "BASS",
+    meta: { bpm: 96, chunk_steps: 32, loops: 13 },
+    tone: {
+      mode: "wave",
+      wave: { rate_hz: 22050, base_hz: 689.0625, nibbles: "EA723124578AA97642111211123358BF" },
+      detune_cents: 0,
+      env_ms: { attack: 5, decay: 120, sustain: 0.40, release: 0.0 },
+      gain: 0.6, hpf_hz: 20, lpf_hz: 9000, bit_depth: 16, vibrato: null
+    },
+    chunks: {
+      A1: ["A1","A1","C2","A1","E2","A1","D2","C2","A1","A1","C2","A1","G2","A1","E2","C2",
+           "A1","A1","C2","A1","E2","A1","D2","C2","A1","A1","C2","A1","G2","A1","E2","C2"],
+      B1: ["G1","G1","A#1","G1","D2","G1","C2","A#1","G1","G1","A#1","G1","D2","G1","C2","A#1",
+           "E1","E1","G1","E1","B1","E1","A1","G1","E1","E1","G1","E1","B1","E1","A1","G1"],
+    },
+    layout: Array(12).fill(["A1","B1"]).concat([["A1","A1"]]),
+  };
+  function buildBassSteps(cfg = SQMerge_BASS){
+    const out=[]; for (const [f,b] of cfg.layout) out.push(...cfg.chunks[f], ...cfg.chunks[b]); return out;
+  }
+
+  // ---- Bass（Alt） ----
+  const SQMerge_BASS_ALT = {
+    id: "BASS_ALT",
+    meta: SQMerge_BASS.meta,
+    chunks: SQMerge_BASS.chunks,
+    layout: SQMerge_BASS.layout,
+    tone: {
+      mode: "wave",
+      wave: { rate_hz: 22050, base_hz: 689.0625, nibbles: "DA98654432111000000011111223DE52" },
+      detune_cents: 0,
+      env_ms: { attack: 4, decay: 110, sustain: 0.38, release: 0.0 },
+      gain: 0.0, hpf_hz: 60, lpf_hz: 4200, bit_depth: 16, vibrato: null
+    }
+  };
+
+  // ---- Drums ----
+  const DRUM_TONES = {
+    hat:  { dur:0.05, gain:0.3, hpf:14000, hq:0.7, lpf:16000, lq:0.7, a:0.0005, d:0.025, r:0.020 },
+    kick: { start:120, end:48, sweep:0.06, dur:0.14, lpf:1500, lq:0.2, gain:0.4, a:0.001, d:0.100, r:0.060 },
+    snareNoise: { dur:0.14, gain:0.06, hpf:10, hq:0.8, lpf:5000, lq:0.7, a:0.00, d:50, r:0.00 },
+    snareBody:  { wave:"sine", start:210, end:170, sweep:0.06, dur:0.12, gain:0.10, a:0.001, d:0.070, r:0.060, bp:200, bq:2.0 }
+  };
+  const SQMerge_DRUMS = {
+    id: "DRUMS",
+    meta: { bpm: 96, chunk_steps: 32, loops: 13 },
+    parts: {
+      hat: {
+        chunks: { A: ["F#4","","F#4","","F#4","","F#4","","F#4","","F#4","","F#4","","F#4","",
+                       "F#4","","F#4","","F#4","","F#4","","F#4","","F#4","","F#4","","F#4",""] },
+        layout: [ ["00","00"],["00","00"],["00","00"],["00","00"], ["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"] ]
+      },
+      kick: {
+        chunks: { A: ["C2","","","","","","C2","","C2","","","","","","C2","","C2","","","","","","C2","","C2","","","","","","C2",""] },
+        layout: [ ["00","00"],["00","00"],["00","00"],["00","00"], ["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"] ]
+      },
+      snare: {
+        chunks: { A: ["","","","","E4","","","","","","","","E4","","","","","","","","E4","","","","","","","","E4","","",""] },
+        layout: [ ["00","00"],["00","00"],["00","00"],["00","00"], ["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"],["A","A"] ]
+      }
+    }
+  };
+  function buildDrumSteps(cfg = SQMerge_DRUMS){
+    const out = { hat:[], kick:[], snare:[] }, steps = cfg.meta.chunk_steps;
+    for (let i=0;i<cfg.meta.loops;i++){
+      for (const name of Object.keys(cfg.parts)){
+        const {chunks, layout} = cfg.parts[name];
+        const [f,b] = layout[i];
+        const A = (f==="00") ? Array(steps).fill(null) : chunks[f];
+        const B = (b==="00") ? Array(steps).fill(null) : chunks[b];
+        out[name].push(...A, ...B);
+      }
+    }
+    return out;
+  }
+
+  // ---- Lead A（keys_A1） ----
+  const SQMerge_A1 = {
+    id: "LEAD_A",
+    meta: { bpm: 96, chunk_steps: 32, loops: 13 },
+    tone: {
+      mode: "square", duty: 0.5, pwm_rate_hz: 0, pwm_depth: 0,
+      env_ms: { attack: 2, decay: 1500, sustain: 0, release: 100 },
+      gain: 0.06, lpf_hz: 12000, hpf_hz: 20, bit_depth: 16,
+      vibrato: { rate_hz: 5.6, depth_cents: 7, delay_ms: 120, fade_ms: 250 }
+    },
+    chunks: {
+      "00": new Array(32).fill(null),
+      "L1": [{"n":["A4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["A4"],"len":2},null,{"n":["C5"],"len":2},null,{"n":["E5"],"len":2},null,{"n":["G5"],"len":4},null,null,null,{"n":["E5"],"len":4},null,null,null,{"n":["C5"],"len":4},null,null,null,{"n":["B4"],"len":4},null,null,null],
+      "L2": [{"n":["G4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["G4"],"len":2},null,{"n":["B4"],"len":2},null,{"n":["D5"],"len":2},null,{"n":["F5"],"len":4},null,null,null,{"n":["D5"],"len":4},null,null,null,{"n":["B4"],"len":4},null,null,null,{"n":["G4"],"len":4},null,null,null],
+      "L3": [{"n":["G4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["G4"],"len":2},null,{"n":["B4"],"len":2},null,{"n":["D5"],"len":2},null,{"n":["F5"],"len":4},null,null,null,{"n":["D5"],"len":4},null,null,null,{"n":["B4"],"len":4},null,null,null,{"n":["C5"],"len":4},null,null,null],
+      "L8": [{"n":["A4"],"len":16},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],
+      "L6": [{"n":["G4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["G4"],"len":2},null,{"n":["B4"],"len":2},null,{"n":["D5"],"len":2},null,{"n":["F5"],"len":4},null,null,null,{"n":["D5"],"len":4},null,null,null,{"n":["G#5"],"len":4},null,null,null,{"n":["B5"],"len":4},null,null,null],
+      "L9": [{"n":["A5"],"len":24},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],
+    　"R1": [null,null,null,null,null,null,null,null,null,null,null,null,{"n":["A5"],"len":4},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"n":["A5"],"len":4},null,null,null],
+    "R2": [null,null,null,null,null,null,null,null,null,null,null,null,{"n":["G5"],"len":4},null,null,null,{"n":["C5"],"len":4},null,null,null,null,null,{"n":["B4"],"len":4},null,null,null,null,null,{"n":["E5"],"len":4},null,null,null],
+    "R3": [{"n":["A4"],"len":12},null,null,null,null,null,null,null,null,null,null,null,{"n":["A5"],"len":4},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"n":["A5"],"len":4},null,null,null]
+    },
+
+    layout: [
+      ["00","00"], ["00","00"], ["L1","L2"], ["L1","L3"], ["L8","00"],
+      ["R1","R2"], ["L1","L2"], ["L1","L3"], ["R3","R2"], ["R1","R2"],
+      ["L1","L3"], ["L1","L6"], ["L9","00"]
+    ]
+  };
+  function buildA1Steps(cfg = SQMerge_A1){
+    const steps = new Array(cfg.meta.loops * 64).fill(null);
+    for(let loop=1; loop<=cfg.meta.loops; loop++){
+      const base = (loop-1)*64;
+      const [A,B] = cfg.layout[loop-1];
+      const ca = cfg.chunks[A] || cfg.chunks["00"];
+      const cb = cfg.chunks[B] || cfg.chunks["00"];
+      for(let i=0;i<32;i++){ steps[base+i] = ca[i] ?? null; }
+      for(let i=0;i<32;i++){ steps[base+32+i] = cb[i] ?? null; }
+    }
+    return steps;
+  }
+
+
+
+
+onTrack('A1', t=>{
+  const R1 = {"bpm":96,"low_oct":3,"steps":[null,null,null,null,null,null,null,null,null,null,null,null,{"n":["A5"],"len":4},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"n":["A5"],"len":4},null,null,null]};
+  const R2 = {"bpm":96,"low_oct":3,"steps":[null,null,null,null,null,null,null,null,null,null,null,null,{"n":["G5"],"len":4},null,null,null,{"n":["C5"],"len":4},null,null,null,null,null,{"n":["B4"],"len":4},null,null,null,null,null,{"n":["E5"],"len":4},null,null,null]};
+
+  t.chunks["R1"] = R1.steps.slice(0, 32);
+  t.chunks["R2"] = R2.steps.slice(0, 32);
+
+  t.layout[5] = ["R1","R2"];
+  t.layout[9] = ["R1","R2"];
+});
+
+
+  // ---- Lead B（keys_A2, @+2対応） ----
+  const SQMerge_A2 = {
+    id: "LEAD_B",
+    meta: { bpm: 96, chunk_steps: 32, loops: 13 },
+    tone: {
+      mode: "square",
+      duty: 0.5, pwm_rate_hz: 0, pwm_depth: 0, detune_cents: 0,
+      env_ms: { attack: 2, decay: 1500, sustain: 0, release: 100 },
+      gain: 0.03, hpf_hz: 20, lpf_hz: 12000, bit_depth: 16,
+      vibrato: { rate_hz: 5.6, depth_cents: 7, delay_ms: 120, fade_ms: 250 }
+    },
+    chunks: {
+      "00": new Array(32).fill(null),
+      "M1": [{"n":["A4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["A4"],"len":2},null,{"n":["C5"],"len":2},null,{"n":["E5"],"len":2},null,{"n":["G5"],"len":4},null,null,null,{"n":["E5"],"len":4},null,null,null,{"n":["C5"],"len":4},null,null,null,{"n":["B4"],"len":4},null,null,null],
+      "M2": [{"n":["G4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["G4"],"len":2},null,{"n":["B4"],"len":2},null,{"n":["D5"],"len":2},null,{"n":["F5"],"len":4},null,null,null,{"n":["D5"],"len":4},null,null,null,{"n":["B4"],"len":4},null,null,null,{"n":["G4"],"len":4},null,null,null],
+      "M3": [{"n":["G4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["G4"],"len":2},null,{"n":["B4"],"len":2},null,{"n":["D5"],"len":2},null,{"n":["F5"],"len":4},null,null,null,{"n":["D5"],"len":4},null,null,null,{"n":["B4"],"len":4},null,null,null,{"n":["C5"],"len":4},null,null,null],
+      "M4": [{"n":["E4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["E4"],"len":2},null,{"n":["G4"],"len":2},null,{"n":["B4"],"len":2},null,{"n":["D5"],"len":4},null,null,null,{"n":["B4"],"len":4},null,null,null,{"n":["G4"],"len":4},null,null,null,{"n":["F#4"],"len":4},null,null,null],
+      "M5": [{"n":["D4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["D4"],"len":2},null,{"n":["F#4"],"len":2},null,{"n":["A4"],"len":2},null,{"n":["C5"],"len":4},null,null,null,{"n":["A4"],"len":4},null,null,null,{"n":["F#4"],"len":4},null,null,null,{"n":["G4"],"len":4},null,null,null],
+      "M6": [{"n":["D4"],"len":10},null,null,null,null,null,null,null,null,null,{"n":["D4"],"len":2},null,{"n":["F#4"],"len":2},null,{"n":["A4"],"len":2},null,{"n":["C5"],"len":4},null,null,null,{"n":["A4"],"len":4},null,null,null,{"n":["D#5"],"len":4},null,null,null,{"n":["F#5"],"len":4},null,null,null],
+      "M8": [{"n":["A4"],"len":10},null,null,null,null,null,null,null,null,null,
+      {"n":["E5"],"len":4},  null,null,null,null,null,null,null,null,null,null,null,
+      null,null,null,null,{"n":["E5"],"len":4},null,null,null,null
+      ],
+      "M9": [{"n":["E5"],"len":24},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]
+    },
+    layout: [
+      ["00","00"], ["00","00"], ["00","00"], ["00","00"], ["00","00"], ["00","00"],
+      ["M1@+2","M2@+2"], ["M1@+2","M3@+2"], ["M8@+2","S2"],
+      ["00","00"], ["M4","M5"], ["M4","M6"], ["M9","00"]
+    ]
+  };
+  function buildA2Steps(cfg = SQMerge_A2){
+    const total = cfg.meta.loops * 64, HALF=32, out = new Array(total).fill(null);
+    const parse = (s)=>{ const m=String(s).match(/^([A-Za-z0-9#]+)(?:@([+\-]?\d+))?$/)||[]; return { id:m[1]||"00", off:m[2]?parseInt(m[2],10):0 }; };
+    const place=(i,ev)=>{ if(i>=0 && i<total && ev) out[i]=ev; };
+    for(let loop=0; loop<cfg.meta.loops; loop++){
+      const base = loop*64;
+      const [A,B] = cfg.layout[loop]||["00","00"];
+      for(const [ofs, tag] of [[0,A],[HALF,B]]){
+        const {id,off} = parse(tag);
+        const src = cfg.chunks[id] || cfg.chunks["00"];
+        for(let i=0;i<HALF;i++){ const ev = src[i]; if(ev!=null) place(base + ofs + i + off, ev); }
+      }
+    }
+    return out;
+  }
+  
+onTrack('A2', t=>{
+  const S1 = {"bpm":96,"low_oct":3,"steps":[null,null,null,null,null,null,null,null,null,null,null,null,{"n":["E5"],"len":4},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"n":["E5"],"len":4},null,null,null]};
+  const S2 = {"bpm":96,"low_oct":3,"steps":[null,null,null,null,null,null,null,null,null,null,null,null,{"n":["D5"],"len":4},null,null,null,{"n":["G4"],"len":4},null,null,null,null,null,{"n":["F#4"],"len":4},null,null,null,null,null,{"n":["B4"],"len":4},null,null,null]};
+
+  t.chunks["S1"] = S1.steps.slice(0,32);
+  t.chunks["S2"] = S2.steps.slice(0,32);
+
+  t.layout[5] = ["S1","S2"];  // 1始まりの6→index 5
+  t.layout[9] = ["S1","S2"];  // 1始まりの10→index 9
+});
+
+  
+TRACKS.A1 = SQMerge_A1;
+TRACKS.A2 = SQMerge_A2;
+flushPatches();
+
+
+
+const SPECIAL_VIB = { depth_cents: 7, delay_ms: 40, fade_ms: 100 };
+const SPECIAL_ENV = { decay: 600, sustain: 0.4, release: 200 };
+const A1_CHUNK_GAIN = { R1:0.75, R2:0.75, R3:0.75 };   // LeadA
+const A2_CHUNK_GAIN = { S1:0.75, S2:0.75, M8:0.75 };   // LeadB（差し替えM8）
+const A1_TARGET_CHUNKS = ["R1","R2","R3"];   // LeadA
+const A2_TARGET_CHUNKS = ["S1","S2","M8"];   // LeadB
+const EXCEPT_FIRST = new Set(["R3","M8"]);   // 先頭ノートだけ除外するチャンク
+
+// ユーティリティ
+function firstNoteIndex(arr){
+  for(let i=0;i<32;i++){ const ev = arr[i];
+    if(ev && typeof ev==="object" && ev.n) return i;
+  }
+  return -1;
+}
+function parseToken(tok){ // "M8@+2" → {name:"M8", offset:2}
+  const [name, off] = String(tok||"00").split("@");
+  let offset = 0;
+  if(off && off.startsWith("+")) offset = parseInt(off.slice(1),10) || 0;
+  return { name, offset };
+}
+function buildTargetSet(track, names){ // track = SQMerge_A1 / _A2
+  const set = new Set();
+  for(let loop=0; loop<track.meta.loops; loop++){
+    const [A,B] = track.layout[loop] || ["00","00"];
+    const parts = [parseToken(A), parseToken(B)];
+    for(let side=0; side<2; side++){
+      const {name, offset} = parts[side];
+      if(!names.includes(name)) continue;
+      const chunk = track.chunks[name] || new Array(32).fill(null);
+      const base  = loop*64 + (side===0 ? 0 : 32);
+      const skip  = EXCEPT_FIRST.has(name) ? firstNoteIndex(chunk) : -1;
+      for(let i=0;i<32;i++){
+        if(skip === i) continue;                                // 先頭ノートを除外
+        const ev = chunk[i]; if(!(ev && ev.n)) continue;        // ノートだけ対象
+        const idx = base + ((i + offset) % 32);                 // @+N に対応
+        set.add(idx);
+      }
+    }
+  }
+  return set;
+}
+
+let A1_TARGET_STEPS = new Set(), A2_TARGET_STEPS = new Set();
+function rebuildTargetStepSets(){
+  A1_TARGET_STEPS = buildTargetSet(SQMerge_A1, A1_TARGET_CHUNKS);
+  A2_TARGET_STEPS = buildTargetSet(SQMerge_A2, A2_TARGET_CHUNKS);
+}
+
+let A1_STEP_CHUNK = new Map(), A2_STEP_CHUNK = new Map();
+
+function buildTargetMap(track, names){
+  const map = new Map();
+  for(let loop=0; loop<track.meta.loops; loop++){
+    const [A,B] = track.layout[loop] || ["00","00"];
+    const parts = [parseToken(A), parseToken(B)]; // 既に追加済みの parseToken を再利用
+    for(let side=0; side<2; side++){
+      const {name, offset} = parts[side];
+      if(!names.includes(name)) continue;
+      const chunk = track.chunks[name] || new Array(32).fill(null);
+      const base  = loop*64 + (side===0 ? 0 : 32);
+      const skip  = EXCEPT_FIRST.has(name) ? firstNoteIndex(chunk) : -1; // 既存関数
+      for(let i=0;i<32;i++){
+        if(skip === i) continue;
+        const ev = chunk[i]; if(!(ev && ev.n)) continue;
+        const idx = base + ((i + offset) % 32);
+        map.set(idx, name); // ←このステップは name チャンク由来
+      }
+    }
+  }
+  return map;
+}
+
+function rebuildTargetStepMaps(){
+  A1_STEP_CHUNK = buildTargetMap(SQMerge_A1, A1_TARGET_CHUNKS); // 既存の配列 ["R1","R2","R3"]
+  A2_STEP_CHUNK = buildTargetMap(SQMerge_A2, A2_TARGET_CHUNKS); // 既存の配列 ["S1","S2","M8"]
+}
+
+
+  // ---- Back 2（Key_C） ----
+  const SQMerge_C = {
+    id: "BACK_2",
+    meta: { bpm: 96, chunk_steps: 32, loops: 13 },
+    tone: {
+      mode: "triangle",
+      tri: { harmonics: 32, tilt_exp: 2.4, reverse: 0 },
+      detune_cents: 0,
+      env_ms: { attack: 3, decay: 120, sustain: 0.5, release: 250 },
+      gain: 0.6, hpf_hz: 500, lpf_hz: 14000, bit_depth: 16,
+      vibrato: { rate_hz: 4.8, depth_cents: 12, delay_ms: 120, fade_ms: 392 }
+    },
+    chunks: {
+      "00": new Array(32).fill(null),
+      Q1: [{"n":["A3"],"len":28},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"n":["C4"],"len":2},null,{"n":["B3"],"len":2},null],
+      Q2: [{"n":["G3"],"len":12},null,null,null,null,null,null,null,null,null,null,null,{"n":["C4"],"len":2},null,{"n":["B3"],"len":2},null,{"n":["F3"],"len":4},null,null,null,{"n":["C4"],"len":2},null,{"n":["B3"],"len":2},null,{"n":["E3"],"len":4},null,null,null,{"n":["C4"],"len":2},null,{"n":["B3"],"len":2},null],
+      Q3: [{"n":["A3"],"len":10,"tailSteps":8},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]
+    },
+    layout: [
+      ["00","00"],["00","00"],["00","00"],["00","00"],
+      ["00","00"],["00","00"],["00","00"],["00","00"],
+      ["Q1","Q2"],["Q1","Q2"],["Q1","Q2"],["Q1","Q2"],
+      ["Q3","00"]
+    ]
+  };
+  function buildCSteps(cfg = SQMerge_C){
+    const total = cfg.meta.loops * 64, out = new Array(total).fill(null);
+    for(let loop=0; loop<cfg.meta.loops; loop++){
+      const base = loop * 64;
+      const [A,B] = cfg.layout[loop];
+      const ca = cfg.chunks[A] || cfg.chunks["00"];
+      const cb = cfg.chunks[B] || cfg.chunks["00"];
+      for(let i=0;i<32;i++) out[base+i] = ca[i] ?? null;
+      for(let i=0;i<32;i++) out[base+32+i] = cb[i] ?? null;
+    }
+    return out;
+  }
+
+  const BACK1_RAW_TONE = {
+    note: 52, detune_cents: 0, harmonics: 64, tilt_exp: 1, reverse: 0,
+    env_ms: { attack:114, decay:857, sustain:0.36, release:470 },
+    gain: 0.085, lpf_hz: 12000, hpf_hz: 20, bit_depth: 16
+  };
+
+  const BACK1_PAT = {
+    "00": { steps: new Array(32).fill(null) },
+    "R0": { steps: [
+      null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,
+      null,null,null,null,null,null,null,null,null,null,null,null,"B2","C3","C#3","D3"
+    ]},
+    "R1": { steps: [
+      "E3","E3",null,null,null,null,"E3","E3",null,null,null,null,null,null,null,null,
+      "E3","E3",null,null,null,null,"E3","E3",null,null,null,null,null,null,null,null
+    ]},
+    "R2": { steps: [
+      "D3","D3",null,null,null,null,"D3","D3",null,null,null,null,null,null,null,null,
+      "C3","C3",null,null,null,null,{"n":["B2"],"len":6},null,null,null,null,null,
+      "B2","C3","C#3","D3"
+    ]},
+    "R3": { steps: [
+      "D3","D3",null,null,null,null,"D3","D3",null,null,null,null,null,null,null,null,
+      "C3","C3",null,null,null,null,{"n":["B2"],"len":10},null,null,null,null,null,null,null,null,null
+    ]}
+  };
+
+  const BACK1_LAYOUT = [
+    ["00","00"], ["00","00"], ["00","00"], ["00","00"], // 1-4 silent
+    ["00","R0"], ["R1","R2"], ["R1","R2"], ["R1","R2"],
+    ["R1","R2"], ["R1","R2"], ["R1","R2"], ["R1","R3"],
+    ["00","00"] // 13 未指定 → 無音
+  ];
+
+  const SQMerge_B1 = {
+    id: "BACK_1",
+    meta: { bpm:96, chunk_steps:32, loops:13 },
+    tone: (function norm(t){
+      return {
+        mode: "saw",
+        saw: { harmonics: (t.harmonics|0)||64, tilt_exp: (typeof t.tilt_exp==="number"? t.tilt_exp:1), reverse: t.reverse|0||0 },
+        detune_cents: t.detune_cents|0||0,
+        env_ms: t.env_ms || {attack:3,decay:120,sustain:0.5,release:160},
+        gain: (typeof t.gain==="number"? t.gain:0.2),
+        hpf_hz: t.hpf_hz ?? 20, lpf_hz: t.lpf_hz ?? 12000, bit_depth: t.bit_depth ?? 16,
+        vibrato: null
+      };
+    })(BACK1_RAW_TONE),
+    chunks: BACK1_PAT,
+    layout: BACK1_LAYOUT
+  };
+
+  function buildB1Steps(cfg = SQMerge_B1){
+    const total = cfg.meta.loops * 64;
+    const out = new Array(total).fill(null);
+    for(let loop=0; loop<cfg.meta.loops; loop++){
+      const base = loop*64;
+      const [A,B] = cfg.layout[loop] || ["00","00"];
+      const ca = cfg.chunks[A]?.steps || new Array(32).fill(null);
+      const cb = cfg.chunks[B]?.steps || new Array(32).fill(null);
+      for(let i=0;i<32;i++) out[base+i] = ca[i] ?? null;
+      for(let i=0;i<32;i++) out[base+32+i] = cb[i] ?? null;
+    }
+    return out;
+  }
+
+  /* ======================================================
+   *                    AUDIO ENGINE
+   * ====================================================== */
+  const BPM = 96;
+  const STEP_DUR = 60 / BPM / 4;
+  const TOTAL_STEPS = SQMerge_BASS.meta.loops * 64;
+
+  
+
+  
+  // Loop options: after first full pass (1..N), repeat from Loop6..N
+  const LOOPS = SQMerge_BASS.meta.loops|0;
+  const LOOP = Object.assign({ enabled:true, restartFromLoop:6 }, (options.loop||{}));
+  const RESTART_LOOP = Math.min(Math.max(((LOOP.restartFromLoop|0)||6), 1), LOOPS);
+  const RESTART_STEP = (RESTART_LOOP - 1) * 64;
+let AC, MASTER, MIX_BASS, MIX_BASS2, MIX_DRUMS, MIX_LEAD_A, MIX_LEAD_B, MIX_BACK2, MIX_BACK1;
+  let isPlaying = false, nextTime = 0, step = 0, rafId = 0;
+  let waveBuf = null, waveBuf2 = null; // Bass/BassAlt
+
+  
+function ensureAC(){
+  if(AC) return AC;
+  AC = new (globalThis.AudioContext || globalThis.webkitAudioContext)();
+  MASTER = AC.createGain(); MASTER.gain.value = MIX.master; MASTER.connect(AC.destination);
+  // Mix buses
+  MIX_BASS   = AC.createGain(); MIX_BASS.gain.value   = MIX.bass;   MIX_BASS.connect(MASTER);
+  MIX_BASS2  = AC.createGain(); MIX_BASS2.gain.value  = 0.0;        MIX_BASS2.connect(MASTER); // no-alt
+  MIX_DRUMS  = AC.createGain(); MIX_DRUMS.gain.value  = MIX.drums;  MIX_DRUMS.connect(MASTER);
+  MIX_LEAD_A = AC.createGain(); MIX_LEAD_A.gain.value = MIX.leadA;  MIX_LEAD_A.connect(MASTER);
+  MIX_LEAD_B = AC.createGain(); MIX_LEAD_B.gain.value = MIX.leadB;  MIX_LEAD_B.connect(MASTER);
+  MIX_BACK2  = AC.createGain(); MIX_BACK2.gain.value  = MIX.back2;  MIX_BACK2.connect(MASTER);
+  MIX_BACK1  = AC.createGain(); MIX_BACK1.gain.value  = MIX.back1;  MIX_BACK1.connect(MASTER);
+  return AC;
+}
+
+
+  function nameToMidi(name){
+    if(name==null || name==="") return null;
+    if(typeof name==="number") return name|0;
+    const m = /^([A-G])([#b]?)(-?\d+)$/.exec(name);
+    if(!m) return null;
+    const N = {C:0,"C#":1,Db:1,D:2,"D#":3,Eb:3,E:4,F:5,"F#":6,Gb:6,G:7,"G#":8,Ab:8,A:9,"A#":10,Bb:10,B:11};
+    const key = m[1] + (m[2]||"");
+    return N[key] + (12*(parseInt(m[3],10)+1));
+  }
+  function midiToFreq(m){ return 440 * Math.pow(2, (m-69)/12); }
+
+  /* ---- Bass synths (wave nibble) ---- */
+  function buildWaveBufferIfNeeded(){
+    if(waveBuf) return;
+    const rate = SQMerge_BASS.tone.wave.rate_hz || 22050;
+    const hex = SQMerge_BASS.tone.wave.nibbles.trim();
+    const arr = new Float32Array(32);
+    for(let i=0;i<32;i++){ arr[i] = (parseInt(hex[i],16)/15)*2 - 1; }
+    const buf = AC.createBuffer(1, 32, rate);
+    buf.copyToChannel(arr, 0, 0);
+    waveBuf = buf;
+  }
+  function playBass(freq, t0, dur){
+    buildWaveBufferIfNeeded();
+    const bs = AC.createBufferSource(); bs.buffer = waveBuf; bs.loop = true;
+    const base = SQMerge_BASS.tone.wave.base_hz || (SQMerge_BASS.tone.wave.rate_hz/32);
+    bs.playbackRate.setValueAtTime(freq / base, t0);
+
+    const hp = AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value = SQMerge_BASS.tone.hpf_hz || 20;
+    const lp = AC.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value = SQMerge_BASS.tone.lpf_hz || 12000;
+
+    const g = AC.createGain();
+    const env = SQMerge_BASS.tone.env_ms || {attack:5,decay:120,sustain:0.4,release:180};
+    const a=env.attack/1000, d=env.decay/1000, s=env.sustain??0.4, r=env.release/1000;
+    const peak = SQMerge_BASS.tone.gain ?? 0.22;
+    const tA=t0, tD=tA+a, tS=tD+d, tR=t0+dur;
+
+    g.gain.setValueAtTime(0.0001,tA);
+    g.gain.linearRampToValueAtTime(peak,tD);
+    g.gain.linearRampToValueAtTime(peak*s,tS);
+    g.gain.setValueAtTime(peak*s,tR);
+    g.gain.linearRampToValueAtTime(0.0001,tR+r);
+
+    bs.connect(hp); hp.connect(lp); lp.connect(g); g.connect(MIX_BASS);
+    bs.start(t0); bs.stop(tR + r + 0.02);
+  }
+
+  function buildWaveBuffer2IfNeeded(){
+    if(waveBuf2) return;
+    const rate = SQMerge_BASS_ALT.tone.wave.rate_hz || 22050;
+    const hex  = SQMerge_BASS_ALT.tone.wave.nibbles.trim();
+    const arr  = new Float32Array(32);
+    for(let i=0;i<32;i++){ arr[i] = (parseInt(hex[i],16)/15)*2 - 1; }
+    const buf = AC.createBuffer(1, 32, rate);
+    buf.copyToChannel(arr, 0, 0);
+    waveBuf2 = buf;
+  }
+  function playBassAlt(freq, t0, dur){
+    buildWaveBuffer2IfNeeded();
+    const bs = AC.createBufferSource(); bs.buffer = waveBuf2; bs.loop = true;
+    const base = SQMerge_BASS_ALT.tone.wave.base_hz || (SQMerge_BASS_ALT.tone.wave.rate_hz/32);
+    bs.playbackRate.setValueAtTime(freq / base, t0);
+
+    const hp = AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value = SQMerge_BASS_ALT.tone.hpf_hz || 60;
+    const lp = AC.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value = SQMerge_BASS_ALT.tone.lpf_hz || 4200;
+
+    const g  = AC.createGain();
+    const env = SQMerge_BASS_ALT.tone.env_ms || { attack:4, decay:110, sustain:0.38, release:140 };
+    const a=env.attack/1000, d=env.decay/1000, s=env.sustain??0.38, r=env.release/1000;
+    const peak = SQMerge_BASS_ALT.tone.gain ?? 0.14;
+
+    const tA=t0, tD=tA+a, tS=tD+d, tR=t0+dur;
+    g.gain.setValueAtTime(0.0001,tA);
+    g.gain.linearRampToValueAtTime(peak,tD);
+    g.gain.linearRampToValueAtTime(peak*s,tS);
+    g.gain.setValueAtTime(peak*s,tR);
+    g.gain.linearRampToValueAtTime(0.0001,tR+r);
+
+    bs.connect(hp); hp.connect(lp); lp.connect(g); g.connect(MIX_BASS2);
+    bs.start(t0); bs.stop(tR + r + 0.02);
+  }
+
+  /* ---- Drum synths ---- */
+  function trigHat(t0){
+    const v = DRUM_TONES.hat;
+    const len = Math.max(1, Math.floor(AC.sampleRate * v.dur));
+    const buf = AC.createBuffer(1, len, AC.sampleRate);
+    const ch  = buf.getChannelData(0);
+    for(let i=0;i<len;i++) ch[i] = Math.random()*2-1;
+
+    const src = AC.createBufferSource(); src.buffer = buf;
+    const hp = AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value = v.hpf; hp.Q.value = v.hq;
+    const lp = AC.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value = v.lpf; lp.Q.value = v.lq;
+    const g  = AC.createGain();
+
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(v.gain, t0 + v.a);
+    g.gain.linearRampToValueAtTime(0.0001, t0 + v.a + v.d + v.r);
+
+    src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(MIX_DRUMS);
+    src.start(t0); src.stop(t0 + v.dur + 0.05);
+  }
+
+  function trigKick(t0){
+    const v = DRUM_TONES.kick;
+    const osc = AC.createOscillator(); osc.type="sine";
+    const g = AC.createGain();
+
+    osc.frequency.setValueAtTime(v.start, t0);
+    osc.frequency.exponentialRampToValueAtTime(v.end, t0 + v.sweep);
+
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(v.gain, t0 + v.a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + v.a + v.d + v.r);
+
+    const lp = AC.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value = v.lpf; lp.Q.value = v.lq;
+    osc.connect(lp); lp.connect(g); g.connect(MIX_DRUMS);
+
+    osc.start(t0); osc.stop(t0 + v.dur + 0.05);
+  }
+
+  function trigSnare(t0){
+    // noise
+    {
+      const n = DRUM_TONES.snareNoise;
+      const len = Math.max(1, Math.floor(AC.sampleRate * n.dur));
+      const buf = AC.createBuffer(1, len, AC.sampleRate);
+      const ch  = buf.getChannelData(0);
+      for(let i=0;i<len;i++) ch[i] = Math.random()*2-1;
+
+      const src = AC.createBufferSource(); src.buffer = buf;
+      const hp = AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value = n.hpf; hp.Q.value = n.hq;
+      const lp = AC.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value = n.lpf; lp.Q.value = n.lq;
+      const g  = AC.createGain();
+
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(n.gain, t0 + n.a);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + n.a + n.d + n.r);
+
+      src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(MIX_DRUMS);
+      src.start(t0); src.stop(t0 + n.dur + 0.05);
+    }
+    // body
+    {
+      const b = DRUM_TONES.snareBody;
+      const osc = AC.createOscillator(); osc.type = b.wave;
+      osc.frequency.setValueAtTime(b.start, t0);
+      osc.frequency.exponentialRampToValueAtTime(b.end, t0 + b.sweep);
+
+      const bp = AC.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value = b.bp; bp.Q.value = b.bq;
+      const g  = AC.createGain();
+
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(b.gain, t0 + b.a);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + b.a + b.d + b.r);
+
+      osc.connect(bp); bp.connect(g); g.connect(MIX_DRUMS);
+      osc.start(t0); osc.stop(t0 + b.dur + 0.05);
+    }
+  }
+
+  /* ---- Lead A / B synths ---- */
+  function playLeadA(freq, t0, dur){
+    const tone = SQMerge_A1.tone;
+    const osc = AC.createOscillator(); osc.type="square";
+    const g = AC.createGain();
+    const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=tone.hpf_hz||20;
+    const lp=AC.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value=tone.lpf_hz||12000;
+
+    if(tone.vibrato){
+      const { rate_hz=5.6, depth_cents=7, delay_ms=120, fade_ms=250 } = tone.vibrato;
+      const lfo=AC.createOscillator(); lfo.type="sine"; lfo.frequency.value=rate_hz;
+      const lfoGain=AC.createGain(); lfoGain.gain.setValueAtTime(0, t0);
+      lfoGain.gain.linearRampToValueAtTime(depth_cents, t0 + delay_ms/1000 + fade_ms/1000);
+      lfo.connect(lfoGain).connect(osc.detune);
+      lfo.start(t0 + delay_ms/1000);
+      lfo.stop(t0 + dur + 1);
+    }
+
+    const env=tone.env_ms||{attack:2,decay:1400,sustain:0,release:70};
+    const a=env.attack/1000, d=env.decay/1000, s=env.sustain??0, r=env.release/1000;
+    const peak=tone.gain??0.20;
+    const tA=t0, tD=tA+a, tS=tD+d, tR=t0+dur;
+
+    osc.frequency.setValueAtTime(freq,t0);
+    g.gain.setValueAtTime(0.0001,tA);
+    g.gain.linearRampToValueAtTime(peak,tD);
+    g.gain.linearRampToValueAtTime(peak*s,tS);
+    g.gain.setValueAtTime(peak*s,tR);
+    g.gain.linearRampToValueAtTime(0.0001,tR+r);
+
+    osc.connect(hp); hp.connect(lp); lp.connect(g); g.connect(MIX_LEAD_A);
+    osc.start(t0); osc.stop(tR + r + 0.05);
+  }
+
+  function playLeadB(freq, t0, dur){
+    const tone = SQMerge_A2.tone;
+    const osc = AC.createOscillator(); osc.type="square";
+    const g = AC.createGain();
+    const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=tone.hpf_hz||20;
+    const lp=AC.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value=tone.lpf_hz||12000;
+
+    if(tone.vibrato){
+      const { rate_hz=5.6, depth_cents=7, delay_ms=120, fade_ms=250 } = tone.vibrato;
+      const lfo=AC.createOscillator(); lfo.type="sine"; lfo.frequency.value=rate_hz;
+      const lfoGain=AC.createGain(); lfoGain.gain.setValueAtTime(0, t0);
+      lfoGain.gain.linearRampToValueAtTime(depth_cents, t0 + delay_ms/1000 + fade_ms/1000);
+      lfo.connect(lfoGain).connect(osc.detune);
+      lfo.start(t0 + delay_ms/1000);
+      lfo.stop(t0 + dur + 1);
+    }
+
+    const env=tone.env_ms||{attack:2,decay:1400,sustain:0,release:70};
+    const a=env.attack/1000, d=env.decay/1000, s=env.sustain??0, r=env.release/1000;
+    const peak=tone.gain??0.12;
+    const tA=t0, tD=tA+a, tS=tD+d, tR=t0+dur;
+
+    osc.frequency.setValueAtTime(freq,t0);
+    g.gain.setValueAtTime(0.0001,tA);
+    g.gain.linearRampToValueAtTime(peak,tD);
+    g.gain.linearRampToValueAtTime(peak*s,tS);
+    g.gain.setValueAtTime(peak*s,tR);
+    g.gain.linearRampToValueAtTime(0.0001,tR+r);
+
+    osc.connect(hp); hp.connect(lp); lp.connect(g); g.connect(MIX_LEAD_B);
+    osc.start(t0); osc.stop(tR + r + 0.05);
+  }
+
+  /* ---- Back 2 synth ---- */
+  function playBack2(freq, t0, lenSteps, tailSteps=0){
+    const tone = SQMerge_C.tone;
+    const osc = AC.createOscillator();
+    osc.type = "triangle";
+
+    const g=AC.createGain();
+    const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=tone.hpf_hz||603;
+    const lp=AC.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value=tone.lpf_hz||14000;
+
+if(tone.vibrato){
+  const { rate_hz=4.8, depth_cents=12, delay_ms=120, fade_ms=392 } = tone.vibrato;
+  const lfo=AC.createOscillator(); lfo.type="sine"; lfo.frequency.value=rate_hz;
+  const lfoGain=AC.createGain();
+  // 遅延→フェードイン
+  lfoGain.gain.setValueAtTime(0, t0);
+  lfoGain.gain.setValueAtTime(0, t0 + delay_ms/1000);
+  lfoGain.gain.linearRampToValueAtTime(depth_cents, t0 + (delay_ms+fade_ms)/1000);
+  lfo.connect(lfoGain).connect(osc.detune);
+  lfo.start(t0);
+  lfo.stop(t0 + (lenSteps*STEP_DUR) + 1);
+}
+
+    const env=tone.env_ms||{attack:3,decay:120,sustain:0.5,release:160};
+    const a=env.attack/1000, d=env.decay/1000, s=env.sustain??0.5, r=env.release/1000;
+    const peak=tone.gain??0.5;
+
+    const dur = Math.max(STEP_DUR, STEP_DUR * (lenSteps||1));
+    const tA=t0, tD=tA+a, tS=tD+d, tOff=t0+dur, tEnd=tOff + r + 0.02;
+
+    osc.frequency.setValueAtTime(freq,t0);
+    g.gain.setValueAtTime(0.0001,tA);
+    g.gain.linearRampToValueAtTime(peak,tD);
+    g.gain.linearRampToValueAtTime(peak*s,tS);
+    if(tailSteps>0){
+      const tailSec = tailSteps * STEP_DUR;
+      const tailStart = Math.max(t0, tOff - tailSec);
+      g.gain.setValueAtTime(peak*s, tailStart);
+      g.gain.linearRampToValueAtTime(0.0001, tEnd);
+    }else{
+      g.gain.setValueAtTime(peak*s, tOff);
+      g.gain.linearRampToValueAtTime(0.0001, tEnd);
+    }
+
+    osc.connect(hp); hp.connect(lp); lp.connect(g); g.connect(MIX_BACK2);
+    osc.start(t0); osc.stop(tEnd);
+  }
+
+  /* ---- Back 1 synth（saw系） ---- */
+  function playBack1(freq, t0, dur){
+    const tone = SQMerge_B1.tone;
+    const osc = AC.createOscillator();
+    osc.type = "sawtooth"; // RAW_TONEのsaw想定
+
+    const g=AC.createGain();
+    const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=tone.hpf_hz||20;
+    const lp=AC.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value=tone.lpf_hz||12000;
+
+    const env=tone.env_ms||{attack:3,decay:120,sustain:0.5,release:160};
+    const a=env.attack/1000, d=env.decay/1000, s=env.sustain??0.5, r=env.release/1000;
+    const peak=tone.gain??0.2;
+
+    const tA=t0, tD=tA+a, tS=tD+d, tR=t0+dur;
+    osc.frequency.setValueAtTime(freq,t0);
+    g.gain.setValueAtTime(0.0001,tA);
+    g.gain.linearRampToValueAtTime(peak,tD);
+    g.gain.linearRampToValueAtTime(peak*s,tS);
+    g.gain.setValueAtTime(peak*s,tR);
+    g.gain.linearRampToValueAtTime(0.0001, tR + r);
+
+    osc.connect(hp); hp.connect(lp); lp.connect(g); g.connect(MIX_BACK1);
+    osc.start(t0); osc.stop(tR + r + 0.05);
+  }
+
+  /* ======================================================
+   *                    SEQUENCING
+   * ====================================================== */
+
+let bassSteps, drumSteps, leadAsteps, leadBsteps, back2Steps, back1Steps;
+function rebuildAllSteps(){
+  bassSteps  = buildBassSteps();
+  drumSteps  = buildDrumSteps();
+  leadAsteps = buildA1Steps();
+  leadBsteps = buildA2Steps();
+  back2Steps = buildCSteps();
+  back1Steps = buildB1Steps();
+}
+
+  function scheduleStep(t){
+  // Bass
+  const b = bassSteps[step];
+  if (b){ const m=nameToMidi(b); if(m!=null) playBass(midiToFreq(m), t, STEP_DUR*0.95); }
+
+  // Bass Alt（Bassと同じノートを薄くレイヤー）
+  const b2 = b;
+  if (b2){ const m=nameToMidi(b2); if(m!=null) playBassAlt(midiToFreq(m), t, STEP_DUR*0.95); }
+
+  // Drums
+  if (drumSteps.hat[step])   trigHat(t);
+  if (drumSteps.kick[step])  trigKick(t);
+  if (drumSteps.snare[step]) trigSnare(t);
+
+  // === 対象チャンクのステップだけ vibrato & env を一時上書き ===
+  const a1Apply = A1_TARGET_STEPS.has(step) || A1_STEP_CHUNK.has(step);
+  const a2Apply = A2_TARGET_STEPS.has(step) || A2_STEP_CHUNK.has(step);
+  const bakVibA1 = SQMerge_A1.tone.vibrato, bakEnvA1 = SQMerge_A1.tone.env_ms;
+  const bakVibA2 = SQMerge_A2.tone.vibrato, bakEnvA2 = SQMerge_A2.tone.env_ms;
+  const bakGainA1 = SQMerge_A1.tone.gain,     bakGainA2 = SQMerge_A2.tone.gain;
+  if (a1Apply){
+    SQMerge_A1.tone.vibrato = { ...bakVibA1, ...SPECIAL_VIB };
+    SQMerge_A1.tone.env_ms  = { ...bakEnvA1, ...SPECIAL_ENV };
+    const ch = A1_STEP_CHUNK.get(step);
+    const mul = ch ? A1_CHUNK_GAIN[ch] : null;
+    if (mul != null) SQMerge_A1.tone.gain = bakGainA1 * mul;
+
+  }
+  if (a2Apply){
+    SQMerge_A2.tone.vibrato = { ...bakVibA2, ...SPECIAL_VIB };
+    SQMerge_A2.tone.env_ms  = { ...bakEnvA2, ...SPECIAL_ENV };
+    const ch = A2_STEP_CHUNK.get(step);
+    const mul = ch ? A2_CHUNK_GAIN[ch] : null;
+    if (mul != null) SQMerge_A2.tone.gain = bakGainA2 * mul;
+  }
+
+  // ---- Lead A ----
+  const evA1 = leadAsteps[step];
+  if (evA1 && typeof evA1==="object"){
+    const name = Array.isArray(evA1.n) ? evA1.n[0] : evA1.n;
+    const m = nameToMidi(name);
+    if (m!=null){
+      const dur = Math.max(STEP_DUR*0.95, STEP_DUR*(evA1.len||1));
+      playLeadA(midiToFreq(m), t, dur);
+    }
+  }
+
+  // ---- Lead B ----
+  const evB1 = leadBsteps[step];
+  if (evB1 && typeof evB1==="object"){
+    const name = Array.isArray(evB1.n) ? evB1.n[0] : evB1.n;
+    const m = nameToMidi(name);
+    if (m!=null){
+      const dur = Math.max(STEP_DUR*0.95, STEP_DUR*(evB1.len||1));
+      playLeadB(midiToFreq(m), t, dur);
+    }
+  }
+
+  // ← 一時上書きの復元（ここで元に戻す）
+  if (a1Apply){ SQMerge_A1.tone.vibrato = bakVibA1; SQMerge_A1.tone.env_ms = bakEnvA1; SQMerge_A1.tone.gain    = bakGainA1;}
+  if (a2Apply){ SQMerge_A2.tone.vibrato = bakVibA2; SQMerge_A2.tone.env_ms = bakEnvA2; SQMerge_A2.tone.gain    = bakGainA2;}
+
+
+
+  // Back 2
+  const c = back2Steps[step];
+  if (c && typeof c==="object"){
+    const name = Array.isArray(c.n)?c.n[0]:c.n;
+    const m=nameToMidi(name);
+    if(m!=null){
+      const len = c.len||1, tail = c.tailSteps||0;
+      playBack2(midiToFreq(m), t, len, tail);
+    }
+  }
+
+  // Back 1
+  const d = back1Steps[step];
+  if (d){
+    if (typeof d === "string"){
+      const m=nameToMidi(d); if(m!=null) playBack1(midiToFreq(m), t, STEP_DUR*0.95);
+    }else if (typeof d === "object" && d.n){
+      const name = Array.isArray(d.n)? d.n[0] : d.n;
+      const m=nameToMidi(name);
+      if(m!=null){
+        const dur = Math.max(STEP_DUR*0.95, STEP_DUR*(d.len||1));
+        playBack1(midiToFreq(m), t, dur);
+      }
+    }
+  }
+}
+
+
+  
+
+  function play(){
+    flushPatches();
+    rebuildAllSteps();
+    rebuildTargetStepSets(); // ← 追加：対象ステップの再計算
+    rebuildTargetStepMaps();
+    ensureAC(); AC.resume();
+    if(isPlaying) return;
+    isPlaying = true; step = 0; nextTime = AC.currentTime + 0.05;
+    
+
+    const lookahead = 0.12, schedHorizon = 0.08;
+    (function tick(){
+      if(!isPlaying) return;
+      const now = AC.currentTime;
+      while(nextTime < now + lookahead){
+        scheduleStep(nextTime);
+        nextTime += STEP_DUR;
+        step++;
+        if(step >= TOTAL_STEPS){
+          if(LOOP && LOOP.enabled){
+            step = RESTART_STEP; // Loop back to Loop6 (or configured)
+          }else{
+            isPlaying = false;
+                      return;
+          }
+        }
+      }
+      setTimeout(tick, schedHorizon*1000);
+    })();
+  }
+
+  function stop(){
+    if(!AC) return;
+    isPlaying = false;
+    try{ AC.close(); }catch{}
+    AC = null;
+    MASTER = MIX_BASS = MIX_BASS2 = MIX_DRUMS = MIX_LEAD_A = MIX_LEAD_B = MIX_BACK2 = MIX_BACK1 = null;
+    waveBuf = null; waveBuf2 = null;
+    
+  }
+
+  // UI bindings else stop(); }); if(MASTER) MASTER.gain.value = parseFloat( }); }); }); }); }); }); }); });
+
+
+    // Public API
+    function play(startAtStep){ 
+      flushPatches();
+      rebuildAllSteps();
+      rebuildTargetStepSets(); 
+      rebuildTargetStepMaps();
+      ensureAC(); AC.resume();
+      if(isPlaying) return;
+      isPlaying = true; step = Math.max(0, Math.min(TOTAL_STEPS-1, (typeof startAtStep==='number' ? (startAtStep|0) : 0))); nextTime = AC.currentTime + 0.05;
+      const lookahead = 0.12, schedHorizon = 0.08;
+      (function tick(){
+        if(!isPlaying) return;
+        const now = AC.currentTime;
+        while(nextTime < now + lookahead){
+          scheduleStep(nextTime);
+          nextTime += STEP_DUR;
+          step++;
+          if(step >= TOTAL_STEPS){
+            isPlaying = false;
+            if(onEnded) try{ onEnded(); }catch(e){}
+            return;
+          }
+        }
+        setTimeout(tick, schedHorizon*1000);
+      })();
+    }
+    function stop(){ isPlaying=false; try{ if(AC){ AC.close(); } }catch(e){} AC=null; MASTER=MIX_BASS=MIX_BASS2=MIX_DRUMS=MIX_LEAD_A=MIX_LEAD_B=MIX_BACK2=MIX_BACK1=null; waveBuf=null; waveBuf2=null; }
+    function setVolume(v){ MIX.master = Math.max(0, Math.min(1, +v||0)); if(MASTER) MASTER.gain.value = MIX.master; }
+    function setMix(m){
+      if(!m) return;
+      if(m.bass  != null){ MIX.bass  = +m.bass;  if(MIX_BASS)  MIX_BASS.gain.value  = MIX.bass; }
+      if(m.drums != null){ MIX.drums = +m.drums; if(MIX_DRUMS) MIX_DRUMS.gain.value = MIX.drums; }
+      if(m.leadA != null){ MIX.leadA = +m.leadA; if(MIX_LEAD_A)MIX_LEAD_A.gain.value = MIX.leadA; }
+      if(m.leadB != null){ MIX.leadB = +m.leadB; if(MIX_LEAD_B)MIX_LEAD_B.gain.value = MIX.leadB; }
+      if(m.back2 != null){ MIX.back2 = +m.back2; if(MIX_BACK2) MIX_BACK2.gain.value = MIX.back2; }
+      if(m.back1 != null){ MIX.back1 = +m.back1; if(MIX_BACK1) MIX_BACK1.gain.value = MIX.back1; }
+    }
+    function onfinish(cb){ onEnded = cb; }
+    function getDuration(){ return STEP_DUR * TOTAL_STEPS; }
+    function getBpm(){ return BPM; }
+    function getStepNow(){ return step|0; }
+
+    return { play, stop, setVolume, setMix, onfinish, getDuration, getBpm, getStepNow };
+  }
+  if (typeof module !== 'undefined' && module.exports){
+    module.exports = { SQAudioEngine, createSQEngine: SQAudioEngine };
+  }
+  global.SQAudioEngine = SQAudioEngine; global.createSQEngine = SQAudioEngine;
+})(typeof window!=='undefined' ? window : globalThis);
+
+</script>
+<!-- END SQAudioEngine (ready) inline -->
+
+
+<style id="pc-howto-padding-v296">
+@media (hover: hover) and (pointer: fine) {
+  .howto-overlay { padding-top: 55px !important; }
+}
+</style>
+
+<style>
+/* === Mute button icon variants === */
+.square-btn .icon-note { display: none; }
+.square-btn.state1 .icon-note { display: block !important; }
+.square-btn.state1 .icon-speaker { display: none !important; }
+/* states 0 and 2: speaker visible by default */
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <button id="btnTitle" class="square-btn" aria-label="Back to Title"><span class="label" aria-hidden="true">Title</span></button>
+        <button id="btnHowto" class="square-btn" aria-label="How To Play"><span class="label" aria-hidden="true">How To Play</span></button>
+  <button id="btnMute" class="square-btn" aria-label="Toggle Mute"><svg class="iconMobileSpeaker" viewBox="0 0 24 24" aria-hidden="true" style="width:2.1em; height:2.1em; display:block;"><g class="icon-speaker"><polygon points="4,9 8,9 12,6 12,18 8,15 4,15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"></polygon><path d="M14 9 Q17 12 14 15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path><path d="M16 7 Q21 12 16 17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></path></g>
+      <g class="icon-note-wrap" transform="translate(12 13) scale(1.4 1) translate(-12 -13)">
+      <text class="icon-note"
+        x="11" y="13" text-anchor="middle" dominant-baseline="middle"
+        font-size="23" font-weight="700" fill="currentColor">♫</text>
+      </g>
+  <line class="slash" x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"></line></svg></button>
+  </div>
+
+    <div class="howtoBar" aria-label="How To Play (PC)">
+    <span class="label" id="pcHowtoLink" role="button" tabindex="0" style="cursor:pointer;">How To Play</span>
+  </div>
+  <div class="stageWrap" style="position:relative;">
+    <canvas id="game" width="600" height="600" aria-label="Astrovader Reflection" tabindex="0"></canvas>
+    
+  </div>
+<div id="controls" aria-label="Controls">
+    <span>← → : Move | Z : Reflect | Space : Pause | Esc : Title | M : <svg id="ctrlNote" viewBox="0 0 24 24" aria-hidden="true" style="width:1.1em; height:1.1em; vertical-align:-0.12em;"><text x="12" y="15" text-anchor="middle" dominant-baseline="middle" font-size="19" font-weight="700" fill="currentColor" transform="translate(12 13) scale(1.4 1) translate(-12 -13)">♫</text><line class="slash" x1="5" y1="5" x2="22" y2="24" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg> | S : <svg id="ctrlSpeaker" viewBox="0 0 24 24" aria-hidden="true" style="width:1.2em; height:1.2em; vertical-align:middle;"><polygon points="4,9 8,9 12,6 12,18 8,15 4,15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"></polygon><path d="M14 9 Q17 12 14 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><path d="M16 7 Q21 12 16 17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path><line class="slash" x1="3" y1="3" x2="19" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"></line></svg></span>
+  </div>
+
+  <div class="pad" aria-label="Move & Reflect pad">
+    <button id="btnLeft"  class="half" aria-label="Move Left">
+      <span class="arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><polyline points="15,4 7,12 15,20" /><line x1="8" y1="12" x2="22" y2="12"/></svg>
+      </span>
+    </button>
+    <button id="btnReflect" class="reflectBtn" aria-label="Reflect"><canvas id="reflectCanvas"></canvas>
+    </button>
+    <button id="btnRight" class="half" aria-label="Move Right">
+      <span class="arrow" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><polyline points="9,4 17,12 9,20" /><line x1="2" y1="12" x2="16" y2="12"/></svg>
+      </span>
+    </button>
+  </div>
+</div>
+<!-- How To Play Overlay -->
+<div id="howtoOverlay" aria-modal="true" role="dialog">
+  <div class="frame">
+    <div class="spacer" aria-hidden="true"></div>
+    <div class="howto-panel" role="document">
+      <h2 class="howto-title en">Strafe. Reflect. Collect orbs.</h2>
+      <pre class="howto-pre en">Move with ← →
+Reflect with Z key·↑ / R button, 1s Recharge
+Reflected kills: 2× score, 1-hit, chainable
+Orbs raise multiplier: Yellow +1 / Orange +2
+Asteroids have levels (1–3). 
+Higher level = Stronger and higher scoring.</pre>
+
+      <h2 class="howto-title ja">回避・反射・オーブ回収</h2>
+      <pre class="howto-pre ja">← → で移動
+Z·↑(PC) / R(モバイル) で反射（再装填1秒）
+反射撃破：得点2倍・全敵一撃・連鎖可
+オーブ取得で倍率UP → 黄 +1 / オレンジ +2
+隕石にはレベル(1～3)があり
+上がるほど耐久・反撃・得点が増加</pre>
+
+      <div class="howto-footer">Click / Tap to go back</div>
+    </div>
+    <div class="spacer" aria-hidden="true"></div>
+  </div>
+</div>
+</div>
+
+
+<script>
+const CYAN_MIN_LIFE = 3.0; // minimum remaining life (s) guaranteed on red->cyan reflection
+
+
+    // --- input debounce guard (added in fix8) ---
+    function inputAllowedNow(){
+      try{
+        if (typeof blockGameOverInputUntil !== "undefined" && typeof logicMs !== "undefined"){
+          return logicMs >= blockGameOverInputUntil;
+        }
+      }catch(e){}
+      return true;
+    }
+    // --- end guard ---
+    
+
+        
+        
+(() => {
+  "use strict";
+
+  /* ===== 二重初期化ガード ===== */
+  if (window.__ASTROVADER_INITED__) {
+    console.warn("Astrovader already initialized. Skipping second init.");
+    return;
+  }
+  window.__ASTROVADER_INITED__ = true;
+
+  /*** iOS/モバイル対策（ジェスチャ抑止 & ダブルタップズーム抑止） ***/
+  document.addEventListener('contextmenu', e => e.preventDefault(), {passive:false});
+  document.addEventListener('selectstart', e => e.preventDefault(), {passive:false});
+  document.addEventListener('gesturestart', e => e.preventDefault(), {passive:false});
+  document.addEventListener('gesturechange', e => e.preventDefault(), {passive:false});
+  document.addEventListener('gestureend',    e => e.preventDefault(), {passive:false});
+  document.addEventListener('touchstart', e => { if (e.touches && e.touches.length > 1) e.preventDefault(); }, {passive:false});
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', e => {
+    const now = performance.now();
+    if (now - lastTouchEnd <= 350) { e.preventDefault(); }
+    lastTouchEnd = now;
+  }, {passive:false});
+
+  /*** ===== Core consts ===== ***/
+  const W=600, H=600, BG="#000", FG="#fff";
+  const RED="#f00", YELLOW="#ff0", CYAN="#0ff", MAGENTA="#f0f", ORANGE="#FF8C00", BLUE="#09f";
+
+// === Reflection: collision filters ===
+function fragHitsEnemy(f){ return f.c===CYAN || f.c===MAGENTA; }
+function fragHitsPlayer(f){ return f.c===RED || f.c===MAGENTA; }
+
+
+  const PLAYER_BASE=35, PLAYER_HEIGHT=45, PLAYER_SPEED=260, PLAYER_BOTTOM_MARGIN=24, PLAYER_HIT_SCALE=0.6;
+  const BULLET_W=4, BULLET_H=14, BULLET_SPEED=520, FIRE_DELAY=225;
+
+  const A_SIDE=35, A_DIAG=A_SIDE*Math.SQRT2, A_MIN_SPD=120, A_MAX_SPD=180;
+  const B_R=22, B_VY_MIN=A_MIN_SPD*1.7, B_VY_MAX=A_MAX_SPD*1.5, B_SIN_AMP=80, B_SIN_PERIOD=2.4, B_SIN_OMEGA=(Math.PI*2)/B_SIN_PERIOD;
+  const C_R=A_DIAG/2, C_V_MIN=A_MIN_SPD*1.8, C_V_MAX=A_MAX_SPD*1.6, C_TURN_PERIOD=0.8, C_TURN_PAUSE=0.36, TAN45=Math.tan(45*Math.PI/180);
+
+  const BASE_SPAWN_INTERVAL=850, A_BASE_INTERVAL=BASE_SPAWN_INTERVAL/1.5, B_BASE_INTERVAL=A_BASE_INTERVAL*4, C_BASE_INTERVAL=B_BASE_INTERVAL*4;
+  const DIFF_TOTAL=120000; // 2分で最大難易度
+
+  const FRAG_R=4, FRAG_SPEED=300, FRAG_LIFETIME=6.0, RED_BURST_DELAY=120;
+  const ORB_R=3, ORB_VY=130;
+  const FRAG_SPEED_SCALE = 1.00;
+  /* === Background: v2.7 Fix2 G5 (smooth time-mapped density, black header, upward scroll) === */
+  const BG_SPEED_BASE = ORB_VY * 0.375;     // 25% slower start (≈48.75 px/s)
+  const OFF_TILES = 16;                      // 16 screens tall (9600px)
+  const OFF_H = H * OFF_TILES;
+  const HEADER_BLACK_START = OFF_H - H;  // black header placed at the bottom
+  const DENS_MAX_PER_SCREEN = 800;
+  const EASE_P = 1.0;  // ease-in exponent (gentle start, faster later)          // 2分時点の最大密度
+
+  // 2分で speedFactor: 1.0 -> 1.5 （線形）を仮定したときの距離
+  // distance(t) = base * (t + t^2 / 480)   [t in seconds]
+  // 逆関数: t(y) = 240 * ( sqrt(1 + y/(120*base)) - 1 )
+  // 時間割合 f = t/120 = 2*( sqrt(1 + y/(120*base)) - 1 )
+  function timeFracFromY(y){
+    const base = BG_SPEED_BASE;
+    const f = 2 * (Math.sqrt(1 + (y / (120 * base))) - 1);
+    return Math.max(0, Math.min(1, f));
+  }
+  const BG_GRAD_DIST = BG_SPEED_BASE * 150;  // = distance(120s) = base*(120 + 120^2/480) = base*150
+
+  let bgCanvas = null, bgCtx = null;
+  let bgY = 0; // start at 0: the first visible slice is the pure black header
+
+  function poisson(lam){
+    // Knuth's algorithm (OK up to ~35 comfortably here)
+    let L = Math.exp(-lam), p = 1.0, k = 0;
+    do { k++; p *= Math.random(); } while (p > L);
+    return k - 1;
+  }
+
+function initBackground(){
+  try{
+    bgCanvas = document.createElement('canvas');
+    bgCanvas.width = W; bgCanvas.height = OFF_H;
+    bgCtx = bgCanvas.getContext('2d', { alpha:false });
+    bgCtx.fillStyle = "#000"; bgCtx.fillRect(0,0,W,OFF_H);
+
+    const CH = 20;
+    let y0 = 0;                       // 現在の生成位置（[0, OFF_H - H)）
+    const Y_END = OFF_H - H;
+
+    // まずは“下から2画面ぶん”を即時生成（初見の黒帯の上側まで）
+    const PREWARM = Math.min(Y_END, H * 2);
+    while (y0 < PREWARM) { drawStripe(y0); y0 += CH; }
+
+    // 残りはアイドル時間で分割生成
+    const work = (deadline)=>{
+      const budgetMs = 6;                  // 1回あたりの上限（好みで 4〜8ms）
+      const t0 = performance.now();
+      while (y0 < Y_END) {
+        drawStripe(y0); y0 += CH;
+        if ((deadline && deadline.timeRemaining && deadline.timeRemaining() < 1) ||
+            (performance.now() - t0) > budgetMs) break;
+      }
+      if (y0 < Y_END) {
+        schedule();                        // まだ残ってる → 次の空きに継続
+      }
+    };
+    const schedule = ()=>{
+      (window.requestIdleCallback || window.requestAnimationFrame)(work);
+    };
+    schedule();
+
+    function drawStripe(y0){
+      const yMid = y0 + CH*0.5;
+      const dy = Math.max(0, Math.min(BG_GRAD_DIST, HEADER_BLACK_START - yMid));
+      const frac = timeFracFromY(dy);
+      const densPerScreen = DENS_MAX_PER_SCREEN * Math.pow(frac, EASE_P);
+      const lambda = Math.max(0, densPerScreen * (CH / H));
+      const n = poisson(lambda);
+
+      for (let i=0;i<n;i++){
+        let x, y;
+        if (Math.random() < 0.78){
+          const cx = Math.random()*W;
+          const cy = y0 + Math.random()*CH;
+          x = cx + (Math.random()*2-1)*10 + (Math.random()*2-1)*10;
+          y = cy + (Math.random()*2-1)*10 + (Math.random()*2-1)*10;
+        } else {
+          x = Math.random()*W;
+          y = y0 + Math.random()*CH;
+        }
+        if (x<0||x>=W||y<0||y>=OFF_H) continue;
+
+        if (Math.random() < 0.68){
+          bgCtx.fillStyle = "#fff";
+          bgCtx.fillRect(x|0, y|0, 1, 1);
+        } else {
+          bgCtx.beginPath();
+          bgCtx.fillStyle = "rgba(255,255,255,0.92)";
+          bgCtx.arc(x, y, 1, 0, Math.PI*2);
+          bgCtx.fill();
+        }
+      }
+    }
+  }catch(e){
+    console.warn("initBackground failed:", e);
+    bgCanvas = null; bgCtx = null;
+  }
+}
+
+
+  
+  function updateBackground(dt){
+    if(!bgCanvas) return;
+    const spd = BG_SPEED_BASE * speedFactor(); // 2分で1.5倍まで上昇
+    // Direction fixed (locked): upward visual flow
+    bgY -= spd * dt;
+    if(bgY < 0) bgY += OFF_H;
+  }
+function drawBackground(){
+    if(!bgCanvas) return;
+    const y = (bgY|0) % OFF_H;
+    const h1 = Math.min(H, OFF_H - y);
+    ctx.drawImage(bgCanvas, 0, y, W, h1, 0, 0, W, h1);
+    if(h1 < H){
+      const h2 = H - h1;
+      ctx.drawImage(bgCanvas, 0, 0, W, h2, 0, h1, W, h2);
+    }
+  }
+
+  const ORB_HIT_SCALE = 4.0; // オーブの当たり判定だけ拡大
+
+  // Shield設定（v2.5fix4のオフセット）
+  const SHIELD_RADIUS=40, SHIELD_COOLDOWN=500, SHIELD_CENTER_OFFSET_Y=3;
+  const SHIELD_GROW_PIX = 12;
+  const FIXED_DT = 1/60; // 60Hz
+  const SHIELD_FRAMES = 8;
+  const SHIELD_DURATION = SHIELD_FRAMES * FIXED_DT * 1000;  // ≈133ms
+  const SHIELD_PUSH=0.75;
+
+  // 角度テーブル：通常/フル
+  const ANG_A_FULL=[0,90,180,270], ANG_A_REDUCED=[270];
+  const ANG_B_FULL=[70,110,250,290], ANG_B_REDUCED=[250,290];
+  const ANG_C_FULL=[45,90,135,225,270,315], ANG_C_REDUCED=[225,270,315];
+
+  /*** ===== Canvas / DPR ===== ***/
+  const canvas=document.getElementById("game");
+  const ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
+  function fitCanvasToDPR(){
+    const dpr=Math.min(2, window.devicePixelRatio||1);
+    canvas.width=W*dpr; canvas.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  addEventListener("resize", fitCanvasToDPR); fitCanvasToDPR();
+
+  initBackground(); // v2.7 Fix2 G5: prepare starfield
+
+  /*** ===== Storage ===== ***/
+  const HS_KEY="astrovader_highscore", PS_KEY="astrovader_prevscore";
+  const HM_KEY="astrovader_highmult",  PM_KEY="astrovader_prevmult";
+  const loadNum=(k)=>{try{return parseInt(localStorage.getItem(k)||"0",10)||0;}catch{return 0;}};
+  const saveNum=(k,v)=>{ try{ localStorage.setItem(k, String(v)); }catch{} };
+  let highScore=loadNum(HS_KEY), prevScore=loadNum(PS_KEY);
+  let highMult=loadNum(HM_KEY),  prevMult=loadNum(PM_KEY);
+  const pad6=(n)=>n.toString().padStart(6,"0");
+
+  /*** ===== Audio ===== ***/
+  const SFX = (() => {
+    const AC = new (window.AudioContext || window.webkitAudioContext)(); let muted=false;
+    let unlocked = false;
+    const resume=async()=>{ try{ await AC.resume(); }catch{} };
+    async function unlock(){
+      if(unlocked) return;
+      try{
+        await resume();
+        const b=AC.createBuffer(1,1,AC.sampleRate);
+        const src=AC.createBufferSource(); src.buffer=b; src.connect(AC.destination); src.start(0);
+        unlocked = true;
+      }catch{}
+    }
+    function env(g,t,vol=0.1,a=0.004,r=0.05,dur=0.12){
+      g.gain.setValueAtTime(0,t);
+      g.gain.linearRampToValueAtTime(vol,t+a);
+      const end=t+dur;
+      g.gain.linearRampToValueAtTime(vol*0.7,end-r);
+      g.gain.exponentialRampToValueAtTime(0.0001,end);
+    }
+    function tone({freq=440,dur=0.1,type="square",vol=0.08,attack=0.004,release=0.05,sweep=0,t0}={}){ if(muted) return;
+      unlock();
+      const t=t0??AC.currentTime; const o=AC.createOscillator(), g=AC.createGain(); o.type=type; o.frequency.setValueAtTime(freq,t);
+      if(sweep!==0) o.frequency.linearRampToValueAtTime(freq+sweep,t+dur);
+      o.connect(g); g.connect(AC.destination); env(g,t,vol,attack,release,dur); o.start(t); o.stop(t+dur);
+    }
+    function noise({dur=0.15,vol=0.12,type="bandpass",q=6,freq=800,t0,sweep=0}={}){ if(muted) return;
+      unlock();
+      const t=t0??AC.currentTime; const buffer=AC.createBuffer(1,Math.ceil(AC.sampleRate*dur),AC.sampleRate); const data=buffer.getChannelData(0);
+      for(let i=0;i<data.length;i++) data[i]=Math.random()*2-1;
+      const src=AC.createBufferSource(); src.buffer=buffer; const bp=AC.createBiquadFilter(); bp.type=type; bp.frequency.value=freq; bp.Q.value=q;
+      const g=AC.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(vol,t+0.002); g.gain.linearRampToValueAtTime(vol*0.7,t+dur-0.04); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+      if(sweep!==0) bp.frequency.linearRampToValueAtTime(freq+sweep,t+dur);
+      src.connect(bp); bp.connect(g); g.connect(AC.destination); src.start(t);
+    }
+    let lastReflectPing=0, lastSpawnBeep=0;
+    function spawn(){ const now=AC.currentTime; if(now-lastSpawnBeep<0.08) return; lastSpawnBeep=now; tone({freq:220+Math.random()*40,dur:0.05}); }
+    function shield(){ tone({freq:540,dur:0.08,type:"sine",vol:0.07,sweep:+180}); }
+    function reflect(){ const now=AC.currentTime; if(now-lastReflectPing<0.05) return; lastReflectPing=now; tone({freq:1200,dur:0.06,vol:0.09,sweep:-100}); }
+    function hit(){ tone({freq:650,dur:0.05}); }
+    function killNormal(){ noise({dur:0.12,vol:0.14,type:"lowpass",q:1,freq:1200}); tone({freq:280,dur:0.09,vol:0.08,sweep:-160}); }
+    function killSpecial(){ tone({freq:900,dur:0.08,type:"triangle",vol:0.08,sweep:-260}); tone({freq:1400,dur:0.05,vol:0.05}); }
+    function gameOver(){ [440,330,220].forEach((f,i)=> setTimeout(()=> tone({freq:f,dur:0.18,vol:0.09,sweep:-40}), i*140)); }
+    function pickYellow(){ tone({freq:900,dur:0.06,vol:0.07,sweep:+120}); }
+    function pickOrange(){ const d=60; tone({freq:800,dur:0.06,vol:0.08,sweep:+140}); setTimeout(()=> tone({freq:1000,dur:0.06,vol:0.08,sweep:+140}), d); }
+    function mult10(){ [700,900,1100].forEach((f,i)=> setTimeout(()=> tone({freq:f,dur:0.07,vol:0.1}), i*70)); }
+    function newHigh(){ [880,1175].forEach((f,i)=> setTimeout(()=> tone({freq:f,dur:0.07,type:"square",vol:0.11}), i*70)); }
+    function gameOverHigh(){ const t0 = AC.currentTime + 0.02; const motif = [659,784,988,1047,988,784,880]; motif.forEach((f,i)=> tone({freq:f, dur:0.12, type:"square", vol:0.1, t0: t0 + i*0.1})); noise({dur:0.22, vol:0.08, type:"bandpass", q:4, freq:1400, t0: t0+0.05}); }
+
+  function startJingle(){
+  const t0 = AC.currentTime + 0.02;
+  // 3.2倍相当（0.10→0.32 / 0.11→0.352）
+  noise({dur:0.11, vol:0.32,  type:"bandpass", q:6, freq:700,  sweep:+300, t0:t0});
+  noise({dur:0.11, vol:0.32,  type:"bandpass", q:6, freq:950,  sweep:+350, t0:t0+0.12});
+  noise({dur:0.12, vol:0.352, type:"bandpass", q:6, freq:1200, sweep:+400, t0:t0+0.24});
+  // 置換：square → bandpass ノイズ（高域寄りで短く締め）
+  noise({dur:0.10, vol:0.32,  type:"bandpass", q:6, freq:1350, sweep:+420, t0:t0+0.36});
+}
+
+    function startBween(){ if(muted) return; /* v2.5fix7 の小音量版を踏襲 */
+      const T = 1.0; const t0 = AC.currentTime + 0.02;
+      const tri = AC.createOscillator(); tri.type="triangle"; tri.frequency.setValueAtTime(45, t0); tri.frequency.exponentialRampToValueAtTime(272, t0+T);
+      const triGain = AC.createGain(); triGain.gain.setValueAtTime(0.45, t0);
+      const sq = AC.createOscillator(); sq.type="square"; sq.frequency.setValueAtTime(45, t0); sq.frequency.exponentialRampToValueAtTime(272, t0+T);
+      const sqGain = AC.createGain(); sqGain.gain.setValueAtTime(0.0, t0); sqGain.gain.linearRampToValueAtTime(0.20, t0+T);
+      const lfo = AC.createOscillator(); lfo.type="sine"; lfo.frequency.setValueAtTime(6.0, t0);
+      const lfoGain = AC.createGain(); lfoGain.gain.setValueAtTime(5.0, t0+T*0.7); lfo.connect(lfoGain); lfoGain.connect(tri.frequency); lfoGain.connect(sq.frequency);
+      const nb=AC.createBuffer(1, Math.ceil(AC.sampleRate*T), AC.sampleRate); const ch=nb.getChannelData(0); for(let i=0;i<ch.length;i++) ch[i]=Math.random()*2-1;
+      const ns=AC.createBufferSource(); ns.buffer=nb; const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=800; const nG=AC.createGain(); nG.gain.setValueAtTime(0.0, t0); nG.gain.linearRampToValueAtTime(0.18, t0+T*0.9);
+      ns.connect(hp).connect(nG);
+      const ws=AC.createWaveShaper(); const curve=new Float32Array(256); for(let i=0;i<256;i++){ const x=i/128-1; curve[i]=Math.tanh(1.4*x);} ws.curve=curve; ws.oversample="4x";
+      const mix = AC.createGain(); mix.gain.setValueAtTime(0.36, t0);
+      tri.connect(triGain).connect(ws); sq.connect(sqGain).connect(ws); nG.connect(ws); ws.connect(mix).connect(AC.destination);
+      tri.start(t0); sq.start(t0); lfo.start(t0); ns.start(t0); tri.stop(t0+T); sq.stop(t0+T); lfo.stop(t0+T); ns.stop(t0+T);
+    }
+
+    function gameOverBoom(){
+      if(muted) return;
+      const t = AC.currentTime + 0.00;
+      const dur = 2.0;
+
+      // helper to make white noise buffer source
+      function whiteNoise(lenSec){
+        const len = Math.max(1, Math.floor(AC.sampleRate * lenSec));
+        const buf = AC.createBuffer(1, len, AC.sampleRate);
+        const ch = buf.getChannelData(0);
+        for(let i=0;i<len;i++) ch[i] = Math.random()*2 - 1;
+        const src = AC.createBufferSource();
+        src.buffer = buf;
+        return src;
+      }
+      // simple waveshaper curve
+      function makeDistCurve(amount){
+        const samples = 2048;
+        const curve = new Float32Array(samples);
+        const k = amount*50 + 1;
+        for(let i=0;i<samples;i++){ const x=i*2/samples-1; curve[i]=(Math.atan(k*x))/Math.atan(k); }
+        return curve;
+      }
+
+      // crack
+      {
+        const crack = whiteNoise(0.18);
+        const hp = AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.setValueAtTime(4200, t);
+        hp.frequency.exponentialRampToValueAtTime(1800, t + 0.12);
+        const gC = AC.createGain(); gC.gain.setValueAtTime(0.1, t);
+        gC.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        crack.connect(hp).connect(gC).connect(AC.destination);
+        crack.start(t); crack.stop(t + 0.18);
+      }
+
+      // body
+      {
+        const src = whiteNoise(dur);
+        const lp = AC.createBiquadFilter(); lp.type="lowpass";
+        lp.frequency.setValueAtTime(2400, t);
+        lp.frequency.exponentialRampToValueAtTime(90, t + dur);
+
+        const sh = AC.createWaveShaper(); sh.curve = makeDistCurve(1.1);
+        const g = AC.createGain(); g.gain.setValueAtTime(0.13, t);
+        g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+
+        src.connect(lp).connect(sh).connect(g).connect(AC.destination);
+        src.start(t); src.stop(t + dur);
+      }
+    }
+    return {
+      AC,resume,unlock,spawn,shield,reflect,hit,killNormal,killSpecial,gameOver,
+      pickYellow,pickOrange,mult10,newHigh,gameOverHigh,startJingle,startBween,gameOverBoom,
+      toggle(){ muted=!muted; }, get muted(){ return muted; }
+    };
+  })();
+
+/*** ===== BGM (SQAudioEngine) ===== ***/
+let BGM_ENABLED = true;   // ← ミュートとは独立（Mキー/ボタン用）
+
+const BGM = (() => {
+  let engine = null;
+  let pausedStep = 0;
+
+  const MASTER_VOL = 0.55; // 既定BGM音量（お好みで）
+  let globalMuted = false; // Sキーの“全体ミュート”連動
+
+  function ensure(){
+    if (!engine) {
+      engine = new SQAudioEngine({
+        volume: MASTER_VOL,
+        loop: { enabled: true, restartFromLoop: 6 },
+        mix: { bass:0.90, drums:0.90, leadA:0.90, leadB:0.90, back2:0.90, back1:0.85 }
+      });
+// 走行中に完走したら頭（or Loop6）から再開（必要なら調整）
+      engine.onfinish?.(() => {
+        if (state === "running") engine.play(0);
+        applyAudibility();
+      });
+      applyAudibility();
+    }
+  }
+
+  function applyAudibility(){
+    if (engine && engine.setVolume) {
+      const vol = (globalMuted || !BGM_ENABLED) ? 0 : MASTER_VOL;
+      engine.setVolume(vol);
+    }
+  }
+
+  // ラン開始：曲頭から。BGM_ENABLEDに関わらず“再生”し、音量で可聴/無音を切替
+  function start(){
+    ensure();
+    pausedStep = 0;
+    engine.play(0);
+    applyAudibility();
+  }
+
+  // 完全停止（タイトル/GO）：次プレイは曲頭から
+  function stop(){
+    try { engine?.stop?.(); } catch {}
+    engine = null;
+    pausedStep = 0;
+  }
+
+  // ゲームのポーズ：位置を保存して停止（解除で続きから）
+  function pause(){
+    if (!engine) return;
+    try { pausedStep = engine.getStepNow ? engine.getStepNow() : 0; } catch { pausedStep = 0; }
+    try { engine.stop(); } catch {}
+  }
+  function resume(){
+    ensure();
+    engine.play(pausedStep || 0);
+    applyAudibility();
+  }
+
+  // BGMのON/OFF（進行は止めず、音量だけ0/復帰）
+  function setEnabled(on){
+    BGM_ENABLED = !!on;
+    applyAudibility();
+  }
+
+  // 全体ミュート（SFXミュート連動）：進行は止めず音量を0
+  function setGlobalMute(m){
+    globalMuted = !!m;
+    applyAudibility();
+  }
+
+  // キーボード：MでBGMのみON/OFF（任意／UI完成まで）
+addEventListener("keydown", e => {
+  if (e.code === "KeyM") {
+    setEnabled(!BGM_ENABLED);
+    try { syncMuteUI(); } catch (_){}
+  }
+}, { passive: false });
+
+  // コンソール用ヘルパ
+  window.setBGMEnabled = setEnabled;
+  window.toggleBGM = () => setEnabled(!BGM_ENABLED);
+
+  return { start, stop, pause, resume, setEnabled, setGlobalMute, prepare: ensure };
+})();
+
+
+  /*** ===== State & Input ===== ***/
+  const keys={left:false,right:false};
+  const _hori = { pressed:{left:false, right:false}, lastDown:null };
+  function _recomputeKeys(){
+  const L = _hori.pressed.left, R = _hori.pressed.right;
+  if (L && R){
+    keys.left  = (_hori.lastDown === "left");
+    keys.right = (_hori.lastDown === "right");
+  } else {
+    keys.left = !!L; keys.right = !!R;
+  }
+}
+function _setDown(dir){ if(!_hori.pressed[dir]) _hori.lastDown = dir; _hori.pressed[dir] = true;  _recomputeKeys(); }
+function _setUp(dir){   _hori.pressed[dir] = false;
+  const other = (dir === "left" ? "right" : "left");
+  if (_hori.lastDown === dir && _hori.pressed[other]) _hori.lastDown = other;
+  _recomputeKeys();
+}
+  let state="title", score=0, multiplier=1;
+  let startTextUntil = -1;
+  let blockGameOverInputUntil=-1;
+  let lastFireAt=0, lastSpawnAAt=0, lastSpawnBAt=0, lastSpawnCAt=0;
+  let lastReflectAt=-99999, shieldActiveUntil=0;
+  let runHighBroken=false;
+
+  // 難易度（ロジック時間 ms）
+  let diffMs=0;
+
+  // 固定タイムステップ
+  let accum = 0;
+  let prevReal = performance.now();
+  let logicMs = 0;
+
+  
+  // inner-scoped gate (fix): real-time guard for GO input freeze
+  function inputAllowedNow(){
+    return (logicMs >= blockGameOverInputUntil);
+  }
+// 上部ポップ（x10 / High Score）
+  let multPopup=null;
+  function triggerTopPopup(text, color){ multPopup={ text, start:logicMs, dur:1200, hz:10, color:(color||BLUE) }; }
+
+  /*** ===== Buttons & inputs ===== ***/
+  const btnTitle=document.getElementById("btnTitle");
+  const btnMute =document.getElementById("btnMute");
+  const btnLeft =document.getElementById("btnLeft");
+  const btnRight=document.getElementById("btnRight");
+  const btnReflect=document.getElementById("btnReflect");
+
+  btnTitle.addEventListener("pointerdown", e=>{ e.preventDefault(); SFX.unlock(); goTitle(); });
+  
+  // === Mobile 3-state mute for top-right button ===
+  const MOBILE_MUTE_KEY = "av_mobile_mute_state";
+  function isMobileCoarse(){ try{ return window.matchMedia && window.matchMedia("(pointer: coarse)").matches; }catch(e){ return false; } }
+  function loadMobileMuteState(){ try{ const v = parseInt(localStorage.getItem(MOBILE_MUTE_KEY)||"0",10); return (isNaN(v)?0:(v%3+3)%3); }catch(e){ return 0; } }
+  function saveMobileMuteState(v){ try{ localStorage.setItem(MOBILE_MUTE_KEY, String(v)); }catch(e){} }
+  window.__MOBILE_MUTE_STATE__ = loadMobileMuteState();
+  function applyMobileMuteState(){
+    const st = (window.__MOBILE_MUTE_STATE__|0);
+    if (st === 0){ if (SFX.muted) SFX.toggle(); try{ BGM.setGlobalMute(false); BGM.setEnabled(true); }catch(e){} }
+    else if (st === 1){ if (SFX.muted) SFX.toggle(); try{ BGM.setGlobalMute(false); BGM.setEnabled(false); }catch(e){} }
+    else { if (!SFX.muted) SFX.toggle(); try{ BGM.setEnabled(false); BGM.setGlobalMute(true); }catch(e){} }
+  }
+  // Apply on load (mobile only)
+  if (isMobileCoarse()) { applyMobileMuteState(); }
+btnMute.addEventListener("pointerdown", e=>{
+  e.preventDefault();
+  SFX.unlock();
+  if (isMobileCoarse()){
+    window.__MOBILE_MUTE_STATE__ = ((window.__MOBILE_MUTE_STATE__|0)+1)%3;
+    saveMobileMuteState(window.__MOBILE_MUTE_STATE__);
+    applyMobileMuteState();
+  } else {
+    SFX.toggle();
+    BGM.setGlobalMute(SFX.muted);
+  }
+  syncMuteUI();
+});
+function hold(btn, onDown, onUp){
+    btn.addEventListener("pointerdown", e=>{ e.preventDefault(); SFX.unlock(); onDown(); btn.setPointerCapture?.(e.pointerId); });
+    const end=()=> onUp();
+    btn.addEventListener("pointerup", end); btn.addEventListener("pointercancel", end); btn.addEventListener("pointerleave", end);
+  }
+  hold(btnLeft,  ()=> _setDown("left"),  ()=> _setUp("left"));
+  hold(btnRight, ()=> _setDown("right"), ()=> _setUp("right"));
+  btnReflect.addEventListener("pointerdown", e=>{ e.preventDefault(); SFX.unlock(); tryReflect(); });
+
+  const canvasEl=document.getElementById("game");
+  function focusGame(){ try { canvasEl.focus({ preventScroll: true }); } catch(_){} }
+  window.addEventListener("load", () => { 
+  focusGame(); 
+  drawReflectButton(); 
+});
+
+  // 操作でオーディオ解錠 & フォーカス
+  ["pointerdown","touchstart","touchend","mousedown","keydown"].forEach(ev=>{
+    document.addEventListener(ev, ()=>{ SFX.unlock(); focusGame(); }, {capture:true});
+  });
+
+  canvasEl.addEventListener("pointerdown", e=>{
+    e.preventDefault(); SFX.unlock();
+    if(state==="title"){ startRun(); return; }
+    if(state==="gameover"){ if(!inputAllowedNow()) return; startRun(); return; }
+    togglePause();
+  });
+
+  document.addEventListener("visibilitychange", ()=>{ if(document.hidden && state==="running") pauseGame(); });
+  function syncMuteUI(){
+  try{
+    const mobile = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    btnMute.classList.remove("state0","state1","state2");
+    if (mobile){
+      const st = (window.__MOBILE_MUTE_STATE__ ?? 0) | 0;
+      btnMute.classList.add(st===0?"state0":(st===1?"state1":"state2"));
+      btnMute.classList.toggle("muted", st !== 0);
+    } else {
+      btnMute.classList.add(SFX.muted ? "state2" : "state0");
+      btnMute.classList.toggle("muted", SFX.muted);
+    }
+    const ctrls = document.getElementById("controls");
+    if (ctrls) ctrls.classList.toggle("muted", SFX.muted);
+  
+    if (ctrls) ctrls.classList.toggle("bgmOff", !BGM_ENABLED);
+}catch(e){}
+}
+
+
+/*** ===== Reflect button canvas ===== ***/
+const rbCanvas = document.getElementById("reflectCanvas");
+const rbCtx    = rbCanvas.getContext("2d");
+const rbButton = document.getElementById("btnReflect");
+
+let RB_DIRTY = true;
+let RB_W = 64, RB_H = 64;
+let RB_DPR = 0;
+
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(entries => {
+    const rect = entries[0].contentRect;
+    RB_W = rect.width  || RB_W;
+    RB_H = rect.height || RB_H;
+    RB_DIRTY = true;
+  });
+  ro.observe(rbButton);
+} else {
+  addEventListener("resize", () => { RB_DIRTY = true; });
+}
+
+function drawReflectButton(){
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (!RB_DIRTY && dpr === RB_DPR) return;
+  RB_DIRTY = false; RB_DPR = dpr;
+
+  const w = Math.max(1, Math.floor(RB_W * dpr));
+  const h = Math.max(1, Math.floor(RB_H * dpr));
+  if (rbCanvas.width !== w || rbCanvas.height !== h) {
+    rbCanvas.width = w; rbCanvas.height = h;
+  }
+  rbCtx.setTransform(dpr,0,0,dpr,0,0);
+  rbCtx.clearRect(0,0,RB_W,RB_H);
+
+  rbCtx.lineWidth = Math.max(2, Math.floor(RB_H * 0.06));
+  rbCtx.strokeStyle = "#fff";
+  rbCtx.fillStyle = "#fff";
+  rbCtx.font = "700 " + Math.floor(RB_H * 0.55) + "px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  rbCtx.textAlign = "center";
+  rbCtx.textBaseline = "middle";
+  rbCtx.fillText("R", RB_W/2, RB_H/2);
+}
+
+  /*** ===== Collections & helpers ===== ***/
+  const bullets=[], enemies=[], frags=[], orbs=[], delayedSpawns=[];
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  const rand=(a,b)=>a+Math.random()*(b-a);
+  const deg2rad=(d)=>d*Math.PI/180;
+  const rectOverlap=(a,b)=>(a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y);
+  function circleRectOverlap(cx,cy,r,rx,ry,rw,rh){ const nx=clamp(cx,rx,rx+rw), ny=clamp(cy,ry,ry+rh); const dx=cx-nx, dy=cy-ny; return (dx*dx+dy*dy)<=r*r; }
+  function circleCircleOverlap(x1,y1,r1,x2,y2,r2){ const dx=x1-x2, dy=y1-y2; const R=r1+r2; return (dx*dx+dy*dy) <= (R*R); } /* ← 修正 */
+
+  /*** ===== Difficulty curve ===== ***/
+  const LV_DELAY={A:0.00,B:0.25,C:0.50};
+  const diffP = ()=> Math.max(0, Math.min(1, diffMs/DIFF_TOTAL));
+  function spawnScale(){ return 1 + 2*diffP(); }
+  function intervalFor(type){ const base=(type==="A")?A_BASE_INTERVAL:(type==="B")?B_BASE_INTERVAL:C_BASE_INTERVAL; return base / spawnScale(); }
+  function levelForType(type){ const p=diffP(), d=LV_DELAY[type], pt=(p<=d)?0: (p-d)/(1-d); return pt>=0.85?3: pt>=0.5?2: 1; }
+  function speedFactor(){ return 1 + 0.5*diffP(); }
+
+  /*** ===== Drawing ===== ***/
+  function clearSolid(){ ctx.fillStyle=BG; ctx.fillRect(0,0,W,H); }
+  function beginGlow(){ ctx.shadowColor=FG; ctx.shadowBlur=8; }
+  function endGlow(){ ctx.shadowBlur=0; }
+  function strokeMode(){ ctx.strokeStyle=FG; ctx.lineWidth=2; }
+  function drawLevelDots(cx,cy,level){ if(level<=1) return; ctx.fillStyle=FG; const r=2;
+    if(level===2){ ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill(); }
+    else { ctx.beginPath(); ctx.arc(cx-3,cy,r,0,Math.PI*2); ctx.fill(); ctx.beginPath(); ctx.arc(cx+3,cy,r,0,Math.PI*2); ctx.fill(); } }
+  function drawPlayer(){ const l=player.x-PLAYER_BASE/2, r=player.x+PLAYER_BASE/2, b=player.y, t=player.y-PLAYER_HEIGHT;
+    beginGlow(); ctx.beginPath(); ctx.moveTo(l,b); ctx.lineTo(player.x,(b-5)); ctx.lineTo(r,b); ctx.lineTo(player.x,t); ctx.closePath(); strokeMode(); ctx.stroke(); endGlow();
+    { const frac=Math.max(0, Math.min(1, (logicMs-lastReflectAt)/SHIELD_COOLDOWN));
+      const rem=1-frac; if(rem>0){ const h=(b-t)*rem, yTop=b-h; ctx.save();
+        ctx.beginPath(); ctx.moveTo(l,b); ctx.lineTo(player.x,(b-5)); ctx.lineTo(r,b); ctx.lineTo(player.x,t); ctx.closePath(); ctx.clip();
+        ctx.fillStyle="#fff"; ctx.fillRect(l, yTop, (r-l), h); ctx.restore(); }
+    }
+  }
+  function drawBullets(){ ctx.fillStyle=FG; for(const b of bullets) ctx.fillRect(b.x,b.y,b.w,b.h); }
+  function drawEnemies(){
+    beginGlow();
+    for(const e of enemies){
+      if(e.type==="A"){ const cx=e.x+e.diag/2, cy=e.y+e.diag/2, r=e.diag/2;
+        ctx.beginPath(); ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r,cy); ctx.lineTo(cx,cy+r); ctx.lineTo(cx-r,cy);
+        ctx.closePath(); strokeMode(); ctx.stroke(); drawLevelDots(cx,cy,e.level);
+      }else if(e.type==="B"){ ctx.beginPath(); ctx.arc(e.cx,e.cy,e.r,0,Math.PI*2); strokeMode(); ctx.stroke(); drawLevelDots(e.cx,e.cy,e.level);
+      }else{ const sides=6, step=Math.PI*2/sides; ctx.beginPath();
+        for(let i=0;i<sides;i++){ const ang=step*i-Math.PI/2; const x=e.cx+e.r*Math.cos(ang), y=e.cy+e.r*Math.sin(ang); if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y); }
+        ctx.closePath(); strokeMode(); ctx.stroke(); drawLevelDots(e.cx,e.cy,e.level); }
+    }
+    endGlow();
+  }
+  function drawFrags(){ for(const f of frags){ ctx.save(); ctx.translate(f.x,f.y); const phi=Math.atan2(f.vy,f.vx); ctx.rotate(phi-Math.PI/2); ctx.fillStyle=f.c; ctx.fillRect(-4/2,-14/2,4,14); ctx.restore(); } }
+function drawOrbs(){
+  ctx.save();
+
+  let lastShadowColor = null;
+  let lastShadowBlur  = -1;
+
+  for (const o of orbs){
+    if (o.color === ORANGE || o.color === YELLOW){
+      if (lastShadowColor !== o.color){
+        ctx.shadowColor = o.color;
+        lastShadowColor = o.color;
+      }
+
+      const baseBlur = (o.color === ORANGE)
+        ? Math.max(18, o.r * 3.4)
+        : Math.max(16, o.r * 3.0);
+
+      ctx.fillStyle = o.color;
+
+      if (o.color === ORANGE){
+        if (lastShadowBlur !== baseBlur){
+          ctx.shadowBlur = baseBlur;
+          lastShadowBlur = baseBlur;
+        }
+        ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+
+      } else {
+        if (lastShadowBlur !== baseBlur){
+          ctx.shadowBlur = baseBlur;
+          lastShadowBlur = baseBlur;
+        }
+        ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+
+        const b2 = Math.round(baseBlur * 1.2);
+        if (lastShadowBlur !== b2){
+          ctx.shadowBlur = b2;
+          lastShadowBlur = b2;
+        }
+        ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+
+        // ここでも 0 に戻さない（最後にまとめて戻す）
+      }
+
+    } else {
+      ctx.fillStyle = o.color;
+      ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  if (lastShadowBlur !== 0) ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+  function drawShieldRing(){
+    if(logicMs<shieldActiveUntil){
+      const {cx,cy}=player.shieldCenter;
+      const p = Math.max(0, Math.min(1, (logicMs-lastReflectAt)/SHIELD_DURATION));
+      const r0 = SHIELD_RADIUS - SHIELD_GROW_PIX;
+      const rr = r0 + (SHIELD_RADIUS - r0) * p;
+      ctx.strokeStyle=FG; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.stroke(); ctx.lineWidth=1;
+    }
+  }
+  
+
+  function drawTopPopup(){
+    if(!multPopup) return;
+    const el=logicMs - multPopup.start;
+    if(el>multPopup.dur){ multPopup=null; return; }
+    const blink = Math.floor((el/1000)*multPopup.hz)%2===0;
+    if(!blink) return;
+    const y = 56;
+    ctx.save();
+    ctx.fillStyle=(multPopup.color||BLUE);
+    ctx.textAlign="center"; ctx.textBaseline="top";
+    ctx.font="700 42px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.translate(W/2, y);
+    ctx.scale(0.95, 1);
+    ctx.fillText(multPopup.text, 0, 0);
+    ctx.restore();
+  }
+
+  function drawHUD(){
+    ctx.fillStyle=FG; ctx.textBaseline="top"; ctx.textAlign="left";
+    ctx.font="16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.fillText(`SCORE: ${score}`,10,10); ctx.fillText(`MULT: x${multiplier}`,10,30);
+    ctx.textAlign="right"; ctx.fillText(`HIGH: ${highScore} (x${Math.max(1,highMult)})`, W-10, 10); ctx.textAlign="left";
+    if(state==="paused"){ ctx.textAlign="center"; ctx.font="bold 28px system-ui, sans-serif"; ctx.fillText("PAUSED", W/2, 130); ctx.textAlign="left"; }
+  }
+  function drawStartText(){ if(state!=="running") return; const el = startTextUntil - logicMs; if(el<=0) return; ctx.save(); ctx.fillStyle=FG; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.font="700 75px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"; ctx.fillText("HAVE A BLAST", W/2, H*0.50); ctx.restore(); }
+
+  function drawGameOverOverlay(){
+    if(state!=="gameover") return;
+    ctx.save(); ctx.textAlign="center"; ctx.fillStyle=FG;
+    ctx.font="900 88px system-ui, Arial Black, Impact, sans-serif";
+    ctx.fillText("GAME OVER", W/2, H*0.40);
+    ctx.font="bold 44px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    const msgGO="GAME OVER"; const wTarget=ctx.measureText(msgGO).width;
+    const leftStr=`SCORE ${score}`; const rightStr=`MULT x${multiplier}`;
+    const wL=ctx.measureText(leftStr).width; const wR=ctx.measureText(rightStr).width;
+    let gap=Math.max(28, wTarget - (wL+wR)) + 16; // fix8.1: widen gap
+    const total=wL+gap+wR; const y=H*0.56;
+    const maxW = Math.floor(W*0.9);
+    if(total>maxW){
+      const sx = maxW/total;
+      ctx.save();
+      ctx.translate(W/2, y);
+      ctx.scale(sx, 1);
+      ctx.textAlign="left";
+      // remeasure not needed when scaled uniformly on X
+      const x0 = - (wL+gap+wR)/2;
+      ctx.fillText(leftStr, x0, 0);
+      ctx.fillText(rightStr, x0 + wL + gap, 0);
+      ctx.restore();
+    }else{
+      const x0=W/2 - total/2;
+      ctx.textAlign="left"; ctx.fillText(leftStr, x0, y); ctx.fillText(rightStr, x0+wL+gap, y);
+    }
+    ctx.textAlign="center";
+    if (runHighBroken) {
+  const blink = ((Math.floor((logicMs/160)) % 2) === 0);
+  if (blink) {
+    const GO_Y = H * 0.40;     // GAME OVER のY
+    const HS_Y = GO_Y - 60;    // 上側に60pxぶん（好みで調整可）
+
+    ctx.fillStyle = "#f33";
+    ctx.font = "bold 32px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Boom! New High Score!", W/2, HS_Y);
+  }
+}
+    ctx.restore();
+  }
+
+  function drawTitle(){
+    ctx.fillStyle=BG; ctx.fillRect(0,0,W,H); ctx.fillStyle=FG; ctx.textBaseline="top"; ctx.textAlign="left";
+    ctx.font="bold 18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.fillText(`PREVIOUS: ${prevScore}  (x${Math.max(1,prevMult)})`,12,10);
+    ctx.textAlign="right"; ctx.fillText(`HIGH: ${highScore} (x${Math.max(1,highMult)})`, W-10, 10);
+    ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.font="900 100px system-ui, Arial Black, Impact, sans-serif";
+    ctx.lineWidth=2; ctx.strokeStyle=FG;
+    const TITLE_Y = H/2 - 30;
+    ctx.strokeText("Astrovader",W/2,TITLE_Y); ctx.fillStyle=FG; ctx.fillText("Astrovader",W/2,TITLE_Y);
+    // Reflection
+    const REFLECT_GAP = 25;
+    const subY = H/2 + REFLECT_GAP;
+    ctx.save(); // ← 先に save
+    ctx.font = "900 80px system-ui, -apple-system, Segoe UI, Arial, sans-serif";
+    ctx.lineWidth = 3;
+    ctx.lineJoin = "round";
+    ctx.lineCap  = "round";
+    ctx.strokeStyle = "#fff";
+    ctx.fillStyle = "#000";
+    // ① ベース（黒の塗り）
+    ctx.fillText("Reflection", W/2, subY);
+    // ② 白ストローク
+    ctx.strokeText("Reflection", W/2, subY);
+    // ③ 仕上げ（内側をもう一度黒で塗って、ストロークの内側の白を消す）
+    ctx.fillText("Reflection", W/2, subY);
+    ctx.restore();
+    ctx.restore();
+    ctx.font="18px system-ui, sans-serif"; ctx.fillText("Press / Doubletap to start", W/2, H*0.80); ctx.textAlign="left";
+    // --- Credits (bottom row) ---
+    ctx.save();
+    ctx.textBaseline = "alphabetic";      // 下端揃えで配置
+    ctx.fillStyle = FG;                    // タイトルと同じ前景色
+    ctx.font = "300 12px system-ui, sans-serif"; "12px system-ui, sans-serif"
+    const y = H - 10;                      // 下から10pxの余白
+    ctx.textAlign = "left";
+    ctx.fillText("A game by Ryo Sato", 10, y);
+
+    ctx.textAlign = "center";
+    ctx.fillText("2025", W/2, y);
+
+    ctx.textAlign = "right";
+    ctx.fillText("made with ChatGPT", W - 10, y);
+    ctx.restore();
+
+  }
+
+  /*** ===== Entities ===== ***/
+  const player={ x:W/2, y:H-PLAYER_BOTTOM_MARGIN,
+    get bbox(){ const w=PLAYER_BASE*PLAYER_HIT_SCALE, h=PLAYER_HEIGHT*PLAYER_HIT_SCALE; return {x:this.x-w/2,y:this.y-h,w,h}; },
+    get shieldCenter(){ return { cx:this.x, cy:this.y-PLAYER_HEIGHT*0.5 + SHIELD_CENTER_OFFSET_Y }; } };
+
+  // ====== ロジック更新（60Hz固定） ======
+  function update(dt, tMs){
+    if(state==="running") diffMs += dt*1000;
+
+    // v2.7 Fix2 G5: advance background only during gameplay
+    if(state==="running") updateBackground(dt);
+    const dtS = dt * Math.min(1.5, speedFactor());
+
+    if(state!=="running") return;
+
+    let vx=0; if(keys.left)vx-=PLAYER_SPEED; if(keys.right)vx+=PLAYER_SPEED;
+    player.x=clamp(player.x+vx*dtS, PLAYER_BASE/2, W-PLAYER_BASE/2);
+
+    fire(tMs); spawnA(tMs); spawnB(tMs); spawnC(tMs);
+
+    for(const b of bullets) b.y+=b.vy*dtS;
+
+    for(const e of enemies){
+      if(e.type==="A"){ e.y+=e.vy*dtS; }
+      else if(e.type==="B"){
+        e.cy+=e.vy*dtS;
+        const elapsed=(tMs/1000) - e.t0;
+        e.cx=e.x0 + e.amp*e.flip*Math.sin(B_SIN_OMEGA*elapsed); e.cx=clamp(e.cx, e.r, W-e.r);
+      }else{
+        if(e.pause>0){ e.pause-=dtS; }
+        else{
+          e.cy+=e.vy*dtS; const dir=(e.angleIdx===0)?-1:+1; const vxMag=e.vy/TAN45;
+          e.cx+=dir*vxMag*dtS; e.cx=clamp(e.cx, e.r, W-e.r);
+          e.turn-=dtS;
+          if(e.turn<=0 || e.cx-e.r<=0 || e.cx+e.r>=W){
+            let desired;
+            if(e.cx - e.r <= 0){ desired = 1; }
+            else if(e.cx + e.r >= W){ desired = 0; }
+            else { desired = (Math.random()<0.5?0:1);
+              const nearLeft = (e.cx - e.r) < 6; const nearRight = (W - (e.cx + e.r)) < 6;
+              if(nearLeft && desired===0) desired=1; if(nearRight && desired===1) desired=0; }
+            e.angleIdx = desired; e.turn=C_TURN_PERIOD; e.pause=C_TURN_PAUSE;
+          }
+        }
+      }
+    }
+
+    for(const f of frags){ f.x+=f.vx*dtS; f.y+=f.vy*dtS; f.life-=dtS; }
+    for(const o of orbs){ o.y+=o.vy*dtS; }
+
+    reflectFragsIfShieldActive(tMs, dtS); enemyAutoFire(tMs); 
+
+    for(let i=delayedSpawns.length-1;i>=0;i--){
+      const d=delayedSpawns[i]; if(tMs>=d.at){ spawnFragsNow(d.cx,d.cy,d.angles,d.color); delayedSpawns.splice(i,1); }
+    }
+
+    for(let i=bullets.length-1;i>=0;i--) if(bullets[i].y+bullets[i].h<0) bullets.splice(i,1);
+    for(let i=frags.length-1;i>=0;i--){ const f=frags[i]; if(f.life<=0||f.x<-f.r||f.x>W+f.r||f.y<-f.r||f.y>H+f.r) frags.splice(i,1); }
+    for(let i=orbs.length-1;i>=0;i--) if(orbs[i].y-orbs[i].r>H) orbs.splice(i,1);
+    for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i]; const out=(e.type==="A")?(e.y>H):(e.cy-e.r>H); if(out) enemies.splice(i,1); }
+    
+
+    for(let i=enemies.length-1;i>=0;i--){
+      const e=enemies[i]; let hit=-1;
+      if(e.type==="A"){ const er={x:e.x,y:e.y,w:e.diag,h:e.diag};
+        for(let j=bullets.length-1;j>=0;j--){ const b=bullets[j]; if(rectOverlap({x:b.x,y:b.y,w:b.w,h:b.h},er)){ hit=j; break; } } }
+      else{ for(let j=bullets.length-1;j>=0;j--){ const b=bullets[j]; if(circleRectOverlap(e.cx,e.cy,e.r,b.x,b.y,b.w,b.h)){ hit=j; break; } } }
+      if(hit!==-1){ bullets.splice(hit,1); if(e.level>1){ e.level-=1; SFX.hit(); } else { killEnemy(i,"player", tMs); } }
+    }
+
+    for(let i=enemies.length-1;i>=0;i--){
+      const e=enemies[i]; let idx=-1;
+      if(e.type==="A"){ const er={x:e.x,y:e.y,w:e.diag,h:e.diag};
+        for(let k=frags.length-1;k>=0;k--){ const f=frags[k]; if (f.c===RED) continue; if(!fragHitsEnemy(f)) continue; if(circleRectOverlap(f.x,f.y,f.r,er.x,er.y,er.w,er.h)){ idx=k; break; } } }
+      else{ for(let k=frags.length-1;k>=0;k--){ const f=frags[k]; if (f.c===RED) continue; if(circleCircleOverlap(f.x,f.y,f.r,e.cx,e.cy,e.r)){ idx=k; break; } } }
+      if(idx!==-1){
+        const c = frags[idx].c;
+        if(!fragHitsEnemy({c})) continue; 
+        frags.splice(idx,1);
+        if(c===CYAN){
+　　　　　  killEnemy(i,"cyan", tMs);
+　　　　　}else if(c===MAGENTA){
+  　　　　　if(e.level > 1){
+  　　　　　  e.level -= 1;
+ 　　　　　   if (SFX.hit) SFX.hit(); // 任意：手応えの効果音
+  　　　　}else{
+  　　　　  killEnemy(i,"purple", tMs); 
+        }
+      }else{
+      }
+
+      } 
+     // applyProactiveShooting(e, tMs); // 
+    }
+
+    const pb=player.bbox;
+    for(let i=orbs.length-1;i>=0;i--){
+  const o=orbs[i];
+  if(circleRectOverlap(o.x,o.y,o.r * ORB_HIT_SCALE, pb.x,pb.y,pb.w,pb.h)){
+      const before = multiplier;
+      multiplier += (o.val || 1);
+      const prevDec = Math.floor(before / 10);
+      const nowDec  = Math.floor(multiplier / 10);
+      if (nowDec > prevDec) {
+        const milestone = nowDec * 10;
+        SFX.mult10();
+        triggerTopPopup(`x${milestone}`, "#0af");
+      }
+    if ((o.val || 1) >= 2) {
+    SFX.pickOrange();   // オレンジ（倍率+2想定）用
+    } else {
+    SFX.pickYellow();   // 黄（倍率+1）用
+    }
+    orbs.splice(i,1);
+  }
+}
+
+　　for(const f of frags){
+ 　　 if(fragHitsPlayer(f) && circleRectOverlap(f.x,f.y,f.r,pb.x,pb.y,pb.w,pb.h)){
+ 　　   state="gameover"; onGameOver(); break;
+　　  }
+　　}
+    if(state==="running"){ for(const e of enemies){ const col=(e.type==="A")?rectOverlap(pb,{x:e.x,y:e.y,w:e.diag,h:e.diag}):circleRectOverlap(e.cx,e.cy,e.r,pb.x,pb.y,pb.w,pb.h); if(col){ state="gameover"; onGameOver(); break; } } }
+  }
+
+  function drawHUDandScene(){
+    // v2.7 Fix2 G5: show background in all non-title states; paused/GO keep last frame
+    if(state!=="title"){ drawBackground(); } else { clearSolid(); }
+    if(state==="title"){ drawTitle(); return; }
+    drawPlayer();
+    drawBullets(); drawEnemies(); drawOrbs(); drawFrags(); drawShieldRing();
+    drawHUD(); drawGameOverOverlay(); drawTopPopup(); drawStartText();
+  }
+
+  /*** ===== Spawners / shooting ===== ***/
+  function fire(tMs){ return; lastFireAt=tMs;
+    bullets.push({x:player.x-2, y:player.y-PLAYER_HEIGHT-14, w:4, h:14, vy:-BULLET_SPEED}); }
+
+  function spawnFragsNow(cx,cy,angles,color){
+   const speed = FRAG_SPEED * FRAG_SPEED_SCALE; // 全弾この速度
+   for (const deg of angles){
+     const rad = deg2rad(deg), vx = speed*Math.cos(rad), vy = -speed*Math.sin(rad);      frags.push({x:cx,y:cy,r:FRAG_R,vx,vy,life:FRAG_LIFETIME,c:color});
+    }
+  }
+  function scheduleFrags(cx,cy,angles,color,count,startAtMs){
+    for(let r=0;r<count;r++) delayedSpawns.push({at:startAtMs+r*RED_BURST_DELAY, cx,cy, angles,color});
+  }
+
+// === Reflection: proactive enemy shooting ===
+const TOP_FIRE_BAND = 0.33;   // 上から33%
+const FIRE_BAND_MARGIN = 24;  // 余白（画面入り即発射を防ぐ）
+const EPS_MOVE = 0.02;        // 静止判定（速度のしきい値）
+
+function enemyProactiveAttack(e, tMs){
+  const cx = e.x, cy = e.y; // 必要なら e.cx/e.cy に変更
+  const angles =
+    (e.type === "A") ? ANG_A_REDUCED :
+    (e.type === "B") ? ANG_B_REDUCED :
+                       ANG_C_REDUCED;   // 角度＆本数は元ルールと同じ
+  const reps = Math.max(1, e.spawnLevel || 1);
+  if (reps <= 1) spawnFragsNow(cx, cy, angles, RED);
+  else           scheduleFrags(cx, cy, angles, RED, reps, tMs);
+  // ※ もし *_REDUCED が存在しない場合は ANG_A/B/C に置き換え
+}
+
+function applyProactiveShooting(e, tMs){
+  // --- A/B：上部33%帯にいる間、ランダムな高さで1回だけ発射 ---
+  if (e.type === "A" || e.type === "B"){
+    if (!e._hasProactiveFired){
+      const bandTop = FIRE_BAND_MARGIN;
+      const bandBottom = H * TOP_FIRE_BAND - FIRE_BAND_MARGIN;
+      if (e._proFireY == null){
+        e._proFireY = bandTop + Math.random() * Math.max(1, (bandBottom - bandTop));
+      }
+      if (e.y >= e._proFireY && e.y <= H * TOP_FIRE_BAND){
+        enemyProactiveAttack(e, tMs);
+        e._hasProactiveFired = true;
+      }
+    }
+  }
+  // --- C：移動→停止の遷移ごとに発射 ---
+  else if (e.type === "C"){
+    const speed = Math.hypot(e.vx || 0, e.vy || 0);
+    const moving = speed > EPS_MOVE;
+    if (e._wasMoving === undefined) e._wasMoving = moving;
+    const onScreen = (e.y > -40 && e.y < H + 40); // 画面外の誤発射を抑制
+    if (!moving && e._wasMoving && onScreen){
+      enemyProactiveAttack(e, tMs);
+    }
+    e._wasMoving = moving;
+  }
+}
+
+  const A_RATE = 0.85;
+
+  function spawnA(tMs){
+    if (tMs - lastSpawnAAt < intervalFor("A") / A_RATE) return;  // 間隔を1/0.85倍に
+    lastSpawnAAt = tMs;
+    const diag=A_DIAG, x=Math.floor(rand(0,W-diag)), y=-diag-2, vy=rand(A_MIN_SPD,A_MAX_SPD); const lv=levelForType("A");
+    enemies.push({type:"A", x,y, diag,vy, level:lv, spawnLevel:lv, fireY: rand(0, H*0.33), fired:false }); SFX.spawn();
+  }
+  function spawnB(tMs){
+    if(tMs-lastSpawnBAt<intervalFor("B")) return; lastSpawnBAt=tMs;
+    const r=B_R, amp=Math.min(B_SIN_AMP,(W/2)-r-4); const cx0=rand(r+amp,W-r-amp), cy0=-r-2, vy=rand(B_VY_MIN,B_VY_MAX);
+    const flip=Math.random()<0.5?1:-1; const lv=levelForType("B");
+    enemies.push({type:"B", cx:cx0,cy:cy0, r,vy, t0:tMs/1000, x0:cx0, amp, flip, level:lv, spawnLevel:lv, fireY: rand(0, H*0.33), fired:false }); SFX.spawn();
+  }
+  function spawnC(tMs){
+    if(tMs-lastSpawnCAt<intervalFor("C")) return; lastSpawnCAt=tMs;
+    const r=C_R, cx=rand(r+4,W-r-4), cy=-r-2, vy=rand(C_V_MIN,C_V_MAX), vxMag=vy/TAN45, angleIdx=Math.random()<0.5?0:1; const lv=levelForType("C");
+    enemies.push({type:"C", cx,cy, r,vy, vxMag, angleIdx, turn:C_TURN_PERIOD, pause:0, level:lv, spawnLevel:lv, fireY: rand(0, H*0.33), fired:false }); SFX.spawn();
+  }
+
+function enemyAutoFire(tMs){
+  for(const e of enemies){
+    if(e.type==="A"){
+      // 上から33%内を通過中に1回だけ
+      if(!e.fired && e.y>=0 && e.y<=H*0.33 && e.y>=e.fireY){
+        const cx=e.x+e.diag/2, cy=e.y+e.diag/2;
+        spawnFragsNow(cx,cy, ANG_A_REDUCED, RED);
+        e.fired = true;
+      }
+    }else if(e.type==="B"){
+      if(!e.fired && e.cy>=0 && e.cy<=H*0.33 && e.cy>=e.fireY){
+        spawnFragsNow(e.cx,e.cy, ANG_B_REDUCED, RED);
+        e.fired = true;
+      }
+    }else if(e.type==="C"){
+      // 静止（pause>0）に入ったタイミングで毎回1回
+      if(e.pause>0 && !e.firedOnPause){
+        spawnFragsNow(e.cx,e.cy, ANG_C_REDUCED, RED);
+        e.firedOnPause = true;
+      }else if(e.pause<=0){
+        e.firedOnPause = false;
+      }
+    }
+  }
+}
+
+
+  function killEnemy(i,cause, tMs){
+    const e=enemies[i]; let cx,cy,base;
+    if(e.type==="A"){ cx=e.x+e.diag/2; cy=e.y+e.diag/2; base=1; }
+    else { cx=e.cx; cy=e.cy; base=(e.type==="B")?2:3; }
+
+    if(cause==="cyan" || cause==="purple"){
+      const angles=(e.type==="A")?ANG_A_FULL:(e.type==="B")?ANG_B_FULL:ANG_C_FULL;
+      spawnFragsNow(cx,cy,angles,MAGENTA); SFX.killSpecial();
+    }else{
+      SFX.killNormal();
+    }
+
+     if(cause==="cyan"){
+       orbs.push({x:cx,y:cy,r:ORB_R,vy:ORB_VY,color:ORANGE,val:2}); // ← cyanは従来どおり
+　　　}else if(cause==="purple"){
+　　　  orbs.push({x:cx,y:cy,r:ORB_R,vy:ORB_VY,color:YELLOW,val:1}); // ← 黃オーブ, 1 に変更
+     }else{
+       orbs.push({x:cx,y:cy,r:ORB_R,vy:ORB_VY,color:YELLOW,val:1});
+    }
+
+    score += base*e.spawnLevel*multiplier * ((cause==="cyan") ? 2 : 1);
+    if(!runHighBroken && score>highScore){
+      runHighBroken=true; SFX.newHigh(); triggerTopPopup("High Score Crushed!", "#f33");
+    }
+    enemies.splice(i,1);
+  }
+
+  /*** ===== ラジアル反射 ===== ***/
+  function reflectFragsIfShieldActive(tMs, dt){
+    const SHIELD_GRACE_MS = 10; // 0にすれば従来通り
+    if (state!=="running") return;
+    if (tMs >= shieldActiveUntil + SHIELD_GRACE_MS) return;
+    const {cx,cy}=player.shieldCenter; const R=SHIELD_RADIUS;
+    const EPS=0.1;
+
+    for(const f of frags){
+      if(!(f.c===RED || f.c===MAGENTA)) continue;
+
+      const Rsum = R + f.r;
+
+      const p1x=f.x, p1y=f.y;
+      const p0x=f.x - f.vx*dt, p0y=f.y - f.vy*dt;
+      const sx=p1x-p0x, sy=p1y-p0y;
+      const fx=p0x-cx,  fy=p0y-cy;
+
+      let u=null; const a=sx*sx+sy*sy;
+      if(a>1e-8){
+        const b=2*(fx*sx + fy*sy);
+        const c=fx*fx + fy*fy - Rsum*Rsum;
+        const disc=b*b - 4*a*c;
+        if(disc>=0){
+          const s=Math.sqrt(disc), u1=(-b - s)/(2*a), u2=(-b + s)/(2*a);
+          if(u1>=0 && u1<=1) u=u1; else if(u2>=0 && u2<=1) u=u2;
+        }
+      }
+
+      let dx,dy,qx,qy;
+      if(u!==null){ qx=p0x + sx*u; qy=p0y + sy*u; dx=qx-cx; dy=qy-cy; }
+      else{
+        const d1=Math.hypot(p1x-cx,p1y-cy);
+        if(d1>Rsum) continue;
+        dx=p1x-cx; dy=p1y-cy;
+        qx=cx + (dx/(d1||1))*Rsum;
+        qy=cy + (dy/(d1||1))*Rsum;
+      }
+
+      if(f.rfAt && (tMs - f.rfAt) < SHIELD_DURATION) continue;
+
+      const len = Math.hypot(dx,dy) || 1;
+      const ux = dx/len, uy = dy/len;
+      const speed = Math.hypot(f.vx,f.vy) || FRAG_SPEED;
+
+      f.vx = speed*ux;
+      f.vy = speed*uy;
+      f.c  = CYAN;
+f.life = Math.min(Math.max(f.life, CYAN_MIN_LIFE), (typeof FRAG_LIFETIME!=='undefined'?FRAG_LIFETIME:1e9)); // ensure minimum life post-reflect
+      f.rfAt = tMs;
+
+      f.x = cx + (Rsum + SHIELD_PUSH + EPS)*ux;
+      f.y = cy + (Rsum + SHIELD_PUSH + EPS)*uy;
+
+      SFX.reflect();
+    }
+  }
+
+  /*** ===== State transitions ===== ***/
+  function onGameOver(){
+    BGM.stop();
+
+    const isNewHigh = score>highScore; prevScore=score; prevMult=multiplier;
+    try{ saveNum("astrovader_prevscore", String(prevScore)); }catch{}
+    try{ saveNum("astrovader_prevmult", String(prevMult));  }catch{}
+    if(isNewHigh){
+      highScore=score; highMult=multiplier;
+      try{ saveNum("astrovader_highscore", String(highScore)); }catch{}
+      try{ saveNum("astrovader_highmult", String(highMult));  }catch{}
+      runHighBroken=true;
+    }
+    blockGameOverInputUntil = logicMs + 1000;
+    SFX.gameOverBoom();
+  }
+
+  function resetRunData(){
+    score=0; multiplier=1; runHighBroken=false;
+    bullets.length=enemies.length=frags.length=orbs.length=0; delayedSpawns.length=0;
+    lastFireAt=lastSpawnAAt=lastSpawnBAt=lastSpawnCAt=0;
+    lastReflectAt=-99999; shieldActiveUntil=0; diffMs=0; logicMs=0; accum=0;
+    player.x=W/2; multPopup=null;
+  }
+  function startRun(){
+    BGM.start();
+
+    resetRunData();
+    bgY = HEADER_BLACK_START; // start from bottom black header
+    state="running"; startTextUntil=logicMs+2000; SFX.startBween();
+    focusGame();
+  }
+  function goTitle(){
+    BGM.stop();
+
+    resetRunData(); state="title"; SFX.startJingle();
+    focusGame();
+  }
+
+  function pauseGame(){
+    BGM.pause();
+
+    if(state!=="running") return;
+    state="paused";
+    prevReal = performance.now();
+    accum = 0;
+  }
+  function resumeGame(){
+    BGM.resume();
+
+    if(state!=="paused") return;
+    prevReal = performance.now();
+    accum = 0;
+    state="running";
+  }
+  function togglePause(){ (state==="running")?pauseGame(): (state==="paused")&&resumeGame(); }
+
+  function tryReflect(){
+    if(logicMs-lastReflectAt>=SHIELD_COOLDOWN){
+      lastReflectAt=logicMs; shieldActiveUntil=logicMs+SHIELD_DURATION;
+      SFX.shield();
+    }
+  }
+
+  /*** ===== Keyboard ===== ***/
+  function __codeOrKeyMatch__(e, codes){
+    if(codes.has(e.code)) return true;
+    const k = (e.key||"");
+    if (k && k.length===1){
+      const uc = k.toUpperCase();
+      if (codes.has("Key"+uc)) return true;
+      if (uc===" " && codes.has("Space")) return true;
+    }
+    if (k==="Enter" && (codes.has("Enter"))) return true;
+    return false;
+  }
+  
+const TITLE_START_KEYS = new Set(["ArrowLeft","ArrowRight","KeyZ","Enter","ArrowUp","Space"]);
+const RESTART_KEYS     = new Set(["ArrowLeft","ArrowRight","KeyZ","KeyR","Enter","ArrowUp","Space"]);
+
+addEventListener("keydown", (e) => {
+  SFX.unlock();
+
+  // ---- Title ----
+  if (state === "title") {
+    if (e.code === "KeyS") {
+      SFX.toggle();
+      BGM.setGlobalMute(SFX.muted);
+      syncMuteUI();
+      return;
+    }
+    if (__codeOrKeyMatch__(e, TITLE_START_KEYS)) {
+      e.preventDefault();
+      startRun();
+    }
+    return;
+  }
+  // 通常時の操作
+if (e.code === "ArrowLeft")  { _setDown("left");  e.preventDefault(); }
+if (e.code === "ArrowRight") { _setDown("right"); e.preventDefault(); }
+  if (state !== "gameover" && e.code === "Escape") { goTitle(); }
+  if (e.code === "Space") { e.preventDefault(); togglePause(); }
+
+  // ミュート（SFX）＋BGM無音連動
+  if (e.code === "KeyS") {
+    SFX.toggle();
+    BGM.setGlobalMute(SFX.muted);
+    syncMuteUI();
+  }
+
+  // 反射
+  if (state === "running" && e.code === "KeyZ" || e.code === "ArrowUp") { tryReflect(); }
+
+addEventListener("keydown", (e) => {
+  if (e.repeat) return;
+  if (e.code === "ArrowUp") {
+    e.preventDefault();
+    tryReflect(); 
+  }
+}, { passive:false });
+
+ // ---- Game Over ----
+  if (state === "gameover") {
+    if (!inputAllowedNow()) return;
+
+    if (__codeOrKeyMatch__(e, RESTART_KEYS)) {
+      e.preventDefault();
+      startRun();
+      return;
+    }
+    if (e.code === "Escape") {
+      e.preventDefault();
+      goTitle();
+      return;
+    }
+    return;
+  }
+}, { passive: false });
+
+  addEventListener("keyup",(e)=>{ if(e.code==="ArrowLeft"){ _setUp("left");  e.preventDefault(); }
+                                  if(e.code==="ArrowRight"){ _setUp("right"); e.preventDefault(); } });
+
+  addEventListener("blur",()=>{ keys.left=keys.right=false; });
+
+  /*** ===== Main loop（rAF管理で重複防止） ===== ***/
+  let rafId = null;
+  function loop(tReal){
+    let frame = Math.min(0.1, (tReal - prevReal)/1000);
+    prevReal = tReal;
+
+    if(state==="paused"){
+      drawReflectButton();
+      drawHUDandScene();
+      rafId = requestAnimationFrame(loop);
+      return;
+    }
+
+    accum += frame;
+
+    let steps=0;
+    while(accum >= 1/60 && steps < 8){
+      logicMs += (1/60)*1000;
+      update(1/60, logicMs);
+      accum -= 1/60;
+      steps++;
+    }
+
+    drawReflectButton();
+    drawHUDandScene();
+
+    rafId = requestAnimationFrame(loop);
+  }
+
+  if (rafId !== null) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(loop);
+  syncMuteUI();
+  // === expose minimal hooks for overlays ===
+  try {
+    window.pauseGame = pauseGame;
+    window.resumeGame = resumeGame;
+    window.getAstrovaderState = () => state;
+  } catch(e){}
+})();
+</script>
+
+<script>
+(function(){
+  const overlay = document.getElementById('howtoOverlay');
+  const btns = [ document.getElementById('btnHowto'), document.getElementById('pcHowtoLink') ].filter(Boolean);
+
+  // 現在のステートに応じて一時ポーズ→閉じたらだけ復帰
+  function getState(){
+    try{ return (typeof window.getAstrovaderState==='function') ? window.getAstrovaderState() : null; }catch(_){ return null; }
+  }
+  function pause(){ try{ if (typeof window.pauseGame === 'function'){ window.pauseGame(); return true; } }catch(_){}
+    return false; }
+  function resume(){ try{ if (typeof window.resumeGame === 'function'){ window.resumeGame(); return true; } }catch(_){}
+    return false; }
+
+  let pausedByHowto = false;
+  let guardsOn = false;
+
+  function show(){
+    overlay.style.display = 'block';
+    // 走行中だけ一時ポーズ（タイトル/ポーズ中は何もしない）
+    pausedByHowto = (getState()==="running") && pause();
+    addGuards();
+  }
+  function hide(){
+    overlay.style.display = 'none';
+    removeGuards();
+    if (pausedByHowto){ resume(); pausedByHowto = false; }
+  }
+
+  // ====== 入力ガード：開いている間は全入力を遮断し、指定キーでだけ閉じる ======
+  const CLOSE_CODES = new Set(["Escape","Enter","ArrowLeft","ArrowRight","ArrowUp","KeyZ","Space","KeyS","KeyM"]);
+  function onKeyGuard(e){
+    if (overlay.style.display !== 'block') return;
+    const code = e.code || "";
+    const key  = e.key  || "";
+    const isSpace = (key === " ");
+    if (CLOSE_CODES.has(code) || CLOSE_CODES.has(key) || (isSpace && CLOSE_CODES.has("Space"))) {
+      e.preventDefault(); e.stopPropagation();
+      hide();
+      return;
+    }
+    // その他のキーもゲームへは通さない
+    e.preventDefault(); e.stopPropagation();
+  }
+ function onPointerGuard(e){
+  if (overlay.style.display !== 'block') return;
+  if (e.type === 'touchstart') {
+    e.stopPropagation();
+  } else {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}
+  function addGuards(){
+    if (guardsOn) return;
+    window.addEventListener('keydown', onKeyGuard, {capture:true, passive:false});
+    window.addEventListener('keyup',   onKeyGuard, {capture:true, passive:false});
+    window.addEventListener('pointerdown', onPointerGuard, {capture:true, passive:false});
+    window.addEventListener('touchstart',  onPointerGuard, {capture:true, passive:false});
+    window.addEventListener('mousedown',   onPointerGuard, {capture:true, passive:false});
+    guardsOn = true;
+  }
+  function removeGuards(){
+    if (!guardsOn) return;
+    window.removeEventListener('keydown', onKeyGuard, {capture:true});
+    window.removeEventListener('keyup',   onKeyGuard, {capture:true});
+    window.removeEventListener('pointerdown', onPointerGuard, {capture:true});
+    window.removeEventListener('touchstart',  onPointerGuard, {capture:true});
+    window.removeEventListener('mousedown',   onPointerGuard, {capture:true});
+    guardsOn = false;
+  }
+
+  // 開く（Topbar/PCリンク）
+  btns.forEach(b => {
+    if (!b) return;
+    b.removeAttribute('aria-disabled');
+    b.style.cursor = 'pointer';
+    b.addEventListener('click', show, {passive:true});
+    b.addEventListener('keydown', e => { if(e.key==='Enter' || e.key===' ') show(); });
+  });
+
+  // 閉じる（どこでもクリックで閉じる）
+  overlay.addEventListener('click', hide, {passive:true});
+  overlay.addEventListener('touchend', hide, {passive:true});
+  window.addEventListener('keydown', e => {
+    if (overlay.style.display==='block' && e.key==='Escape'){ e.preventDefault(); hide(); }
+  }, {passive:false});
+
+  // タブが非表示になったら自動で閉じる（ポーズからだけ復帰）
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && overlay.style.display==='block') hide();
+  });
+})();
+</script>
+
+
+<!-- BEGIN audio bootstrap (first-gesture start) [mobile double-tap hard gate] -->
+<script>
+(function(){
+  let startedOnce = false;
+  let tapCount = 0;
+
+  function isMobile(){
+    try{ if (window.matchMedia && matchMedia('(pointer: coarse)').matches) return true; }catch(e){}
+    const ua = (navigator.userAgent||'').toLowerCase();
+    return ('ontouchstart' in window) || /mobi|android|iphone|ipad|ipod|ios/.test(ua);
+  }
+  const mobile = isMobile();
+
+  function kickstart(){
+    if(startedOnce) return;
+    startedOnce = true;
+    try{ if (BGM?.prepare) BGM.prepare(); }catch(e){}
+    try{ if (SFX?.unlock) SFX.unlock(); }catch(e){}
+    detach();
+  }
+
+  function onPointerCapture(ev){
+  if (startedOnce) return;
+  if (mobile){
+    tapCount += 1;
+    if (tapCount === 1){
+      try{ if (BGM?.prepare) BGM.prepare(); }catch(e){}
+      try{ if (SFX?.unlock) SFX.unlock(); }catch(e){}
+      try{ ev.stopImmediatePropagation(); }catch(e){}
+      try{ ev.preventDefault(); }catch(e){}
+      return; // 最初のタップはUI的には無反応のまま
+    }
+  }
+  kickstart();
+}
+
+  function onTouchStartCapture(ev){
+    // iOS Safari 旧環境対策: touchstart でも同様にブロック
+    return onPointerCapture(ev);
+  }
+
+  function onKeyDown(ev){
+    if(startedOnce) return;
+    if(mobile) return; // モバイル初回はダブルタップのみ。キーでは開始しない。
+    kickstart();
+  }
+
+  function detach(){
+    window.removeEventListener('pointerdown', onPointerCapture, {capture:true});
+    window.removeEventListener('touchstart', onTouchStartCapture, {capture:true});
+    window.removeEventListener('keydown', onKeyDown);
+  }
+
+  // キャプチャ段階で最初のタップを握りつぶす（タイトル画面の1回目タップ対策）
+  window.addEventListener('pointerdown', onPointerCapture, {capture:true, passive:false});
+  window.addEventListener('touchstart', onTouchStartCapture, {capture:true, passive:false});
+  window.addEventListener('keydown', onKeyDown);
+})();
+</script>
+
+
+</body>
+</html>
