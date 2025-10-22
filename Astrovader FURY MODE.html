@@ -2054,10 +2054,19 @@ function drawHUD(){
 const ORB_HEAL_Y_MS = 250;   // 黄 +0.25s
 const ORB_HEAL_O_MS = 500;   // 橙 +0.5s
 
+  
+  function drawStartText(){ if(state!=="running") return; const el = startTextUntil - logicMs; if(el<=0) return; 
 
-  
-  
-  function drawStartText(){ if(state!=="running") return; const el = startTextUntil - logicMs; if(el<=0) return; ctx.save(); ctx.fillStyle=FG; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.font="700 75px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"; ctx.fillText("LAST SECOND", W/2, H*0.50); ctx.restore(); }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.miterLimit = 2;
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    
+    ctx.font="700 75px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+    ctx.strokeText("LAST SECOND", W/2, H*0.50); ctx.restore();
+  }
 
 function drawGameOverOverlay(){
   if(state!=="gameover") return;
