@@ -121,7 +121,7 @@
   font-weight:900;
 }
 
-:root{ --astro-version: "FURY MODE v1.0.1"; }   /* バージョン */
+:root{ --astro-version: "FURY MODE v1.1.0"; }   /* バージョン */
 
 #howtoOverlay .howto-panel{
   position: relative !important;
@@ -1235,15 +1235,19 @@ function rebuildAllSteps(){
   <div class="frame">
     <div class="spacer" aria-hidden="true"></div>
     <div class="howto-panel" role="document">
-      <h2 class="howto-title en">Strafe. Reflect. Collect orbs.</h2>
-      <pre class="howto-pre en">Move with ← →
-Reflect with Z key·↑ / R button, 0.5s Recharge
+      <h2 class="howto-title en">Strafe. Reflect. Collect orbs</h2>
+      <pre class="howto-pre en">
+Move: ← →, Reflect: Z key or ↑ / R button
+Reflect takes 1 second to recharge.
+10 seconds countdown. Extend with orbs.
 The game starts on the highest difficulty.
-You won't last seconds.</pre>
+Survive the hellfire.</pre>
 
       <h2 class="howto-title ja">回避・反射・オーブ回収</h2>
-      <pre class="howto-pre ja">← → で移動
-Z·↑(PC) / R(モバイル)で反射（再装填0.5秒）
+      <pre class="howto-pre ja">
+移動：← →　反射：Z・↑(PC)／R(モバイル)
+反射のリチャージ0.5秒。
+持ち時間10秒。オーブ取得で延長。
 ゲームは最高難易度で始動。
 業火を生きのびろ。</pre>
 
@@ -1304,7 +1308,8 @@ const CYAN_MIN_LIFE = 3.0; // minimum remaining life (s) guaranteed on red->cyan
   const W=600, H=600, BG="#000", FG="#fff";
   const RED="#f00", YELLOW="#ff0", CYAN="#0ff", MAGENTA="#f0f", ORANGE="#FF8C00", BLUE="#09f";
 
-  const PLAYER_BASE=35, PLAYER_HEIGHT=45, PLAYER_SPEED=260, PLAYER_BOTTOM_MARGIN=24, PLAYER_HIT_SCALE=0.6;
+  const PLAYER_BASE=35, PLAYER_HEIGHT=45, PLAYER_SPEED=260, PLAYER_BOTTOM_MARGIN=24, PLAYER_HIT_SCALE=0.5;
+  const PLAYER_HIT_Y_OFFSET = 4;
   const BULLET_W=4, BULLET_H=14, BULLET_SPEED=520, FIRE_DELAY=225;
 
   const A_SIDE=35, A_DIAG=A_SIDE*Math.SQRT2, A_MIN_SPD=120, A_MAX_SPD=180;
@@ -1314,7 +1319,6 @@ const CYAN_MIN_LIFE = 3.0; // minimum remaining life (s) guaranteed on red->cyan
   const BASE_SPAWN_INTERVAL=850, A_BASE_INTERVAL=BASE_SPAWN_INTERVAL/1.5, B_BASE_INTERVAL=A_BASE_INTERVAL*4, C_BASE_INTERVAL=B_BASE_INTERVAL*4;
   const DIFF_TOTAL=120000;
   
-  const FURY_MODE = true;
 
   const FRAG_R=4, FRAG_SPEED=300, FRAG_LIFETIME=6.0, RED_BURST_DELAY=120;
   const ORB_R=3, ORB_VY=130;
@@ -1441,12 +1445,12 @@ function drawBackground(){
   const ORB_HIT_SCALE = 4.0; // オーブの当たり判定だけ拡大
 
   // Shield設定（v2.5fix4のオフセット）
-  const SHIELD_RADIUS=40, SHIELD_COOLDOWN=1000, SHIELD_CENTER_OFFSET_Y=3;
+  const SHIELD_RADIUS=40, SHIELD_COOLDOWN=500, SHIELD_CENTER_OFFSET_Y=3;
   const SHIELD_GROW_PIX = 12;
   const FIXED_DT = 1/60; // 60Hz
   const SHIELD_FRAMES = 8;
   const SHIELD_DURATION = SHIELD_FRAMES * FIXED_DT * 1000;  // ≈133ms
-  const SHIELD_PUSH=0.75;
+  const SHIELD_PUSH=2.00;
 
   // 角度テーブル：通常/フル
   const ANG_A_FULL=[0,90,180,270], ANG_A_REDUCED=[270];
@@ -1464,20 +1468,20 @@ function drawBackground(){
 
   initBackground(); // v2.7 Fix2 G5: prepare starfield
 
-  /*** ===== Storage ===== ***/
+/*** ===== Storage (TIME ONLY) ===== ***/
 const GAME_ID = "fury";
 const K = n => `av_${GAME_ID}_${n}`;
 
-// ここを置き換え
-const HS_KEY = K("highscore"), PS_KEY = K("prevscore");
-const HM_KEY = K("highmult"),  PM_KEY = K("prevmult");
+const TIME_BEST_KEY = K("best_time_ms");
+const TIME_PREV_KEY = K("prev_time_ms");
 
-const loadNum = k => { try { return parseInt(localStorage.getItem(k) || "0", 10) || 0; } catch { return 0; } };
-const saveNum = (k,v) => { try { localStorage.setItem(k, String(v)); } catch {} };
+const loadMs = k => { try { return parseInt(localStorage.getItem(k) || "0", 10) || 0; } catch { return 0; } };
+const saveMs = (k, v) => { try { localStorage.setItem(k, String(v|0)); } catch {} };
+const fmtTime = ms => Math.max(0, ms / 1000).toFixed(1);
 
-let highScore = loadNum(HS_KEY), prevScore = loadNum(PS_KEY);
-let highMult  = loadNum(HM_KEY),  prevMult  = loadNum(PM_KEY);
-const pad6 = n => n.toString().padStart(6,"0");
+let bestTimeMs = loadMs(TIME_BEST_KEY);
+let prevTimeMs = loadMs(TIME_PREV_KEY);
+
 
   /*** ===== Audio ===== ***/
   const SFX = (() => {
@@ -1724,7 +1728,7 @@ function _setUp(dir){   _hori.pressed[dir] = false;
   let blockGameOverInputUntil=-1;
   let lastFireAt=0, lastSpawnAAt=0, lastSpawnBAt=0, lastSpawnCAt=0;
   let lastReflectAt=-99999, shieldActiveUntil=0;
-  let runHighBroken=false;
+  let timeBestBroken = false;
 
   // 難易度（ロジック時間 ms）
   let diffMs=0;
@@ -1733,6 +1737,9 @@ function _setUp(dir){   _hori.pressed[dir] = false;
   let accum = 0;
   let prevReal = performance.now();
   let logicMs = 0;
+// ★ add: survival timer
+let runTimeMs = 0;
+let runTimeFinalMs = 0;
 
   
   // inner-scoped gate (fix): real-time guard for GO input freeze
@@ -1786,7 +1793,10 @@ function hold(btn, onDown, onUp){
   }
   hold(btnLeft,  ()=> _setDown("left"),  ()=> _setUp("left"));
   hold(btnRight, ()=> _setDown("right"), ()=> _setUp("right"));
-  btnReflect.addEventListener("pointerdown", e=>{ e.preventDefault(); SFX.unlock(); tryReflect(); });
+  btnReflect.addEventListener("pointerdown", e=>{
+    e.preventDefault(); SFX.unlock();
+    if (state === "running") tryReflect();
+  });
 
   const canvasEl=document.getElementById("game");
   function focusGame(){ try { canvasEl.focus({ preventScroll: true }); } catch(_){} }
@@ -1885,7 +1895,11 @@ function drawReflectButton(){
   const diffP = ()=> (FURY_MODE ? 1 : Math.max(0, Math.min(1, diffMs/DIFF_TOTAL)));
   function spawnScale(){ return 1 + 2*diffP(); }
   function intervalFor(type){ const base=(type==="A")?A_BASE_INTERVAL:(type==="B")?B_BASE_INTERVAL:C_BASE_INTERVAL; return base / spawnScale(); }
-  function levelForType(type){ const p=diffP(), d=LV_DELAY[type], pt=(p<=d)?0: (p-d)/(1-d); return pt>=0.85?3: pt>=0.5?2: 1; }
+ function levelForType(type){
+  const p = diffP(), d = LV_DELAY[type];
+  const pt = (p <= d) ? 0 : (p - d) / (1 - d);
+  return pt >= 0.5 ? 2 : 1;  // ← 3への分岐を削除
+}
   function speedFactor(){ return 1 + 0.5*diffP(); }
 
   /*** ===== Drawing ===== ***/
@@ -2004,64 +2018,84 @@ function drawOrbs(){
     ctx.restore();
   }
 
-  function drawHUD(){
-    ctx.fillStyle=FG; ctx.textBaseline="top"; ctx.textAlign="left";
-    ctx.font="16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-    ctx.fillText(`SCORE: ${score}`,10,10); ctx.fillText(`MULT: x${multiplier}`,10,30);
-    ctx.textAlign="right"; ctx.fillText(`HIGH: ${highScore} (x${Math.max(1,highMult)})`, W-10, 10); ctx.textAlign="left";
-    if(state==="paused"){ ctx.textAlign="center"; ctx.font="bold 28px system-ui, sans-serif"; ctx.fillText("PAUSED", W/2, 130); ctx.textAlign="left"; }
+function drawHUD(){
+  ctx.fillStyle = FG;
+  ctx.textBaseline = "top";
+  ctx.textAlign = "center";
+
+
+  const tMs  = (state === "running") ? runTimeMs : runTimeFinalMs;
+  const tStr = fmtTime(tMs); // 0.1秒刻み
+  ctx.font = "700 50px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  ctx.fillText(tStr, W/2, 10);
+
+
+  if (state === "paused") {
+    ctx.font = "bold 28px system-ui, sans-serif";
+    ctx.fillText("PAUSED", W/2, 130);
   }
-  function drawStartText(){ if(state!=="running") return; const el = startTextUntil - logicMs; if(el<=0) return; ctx.save(); ctx.fillStyle=FG; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.font="700 75px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"; ctx.fillText("HAVE A BLAST", W/2, H*0.50); ctx.restore(); }
 
-  function drawGameOverOverlay(){
-    if(state!=="gameover") return;
-    ctx.save(); ctx.textAlign="center"; ctx.fillStyle=FG;
-    ctx.font="900 88px system-ui, Arial Black, Impact, sans-serif";
-    ctx.fillText("GAME OVER", W/2, H*0.40);
-    ctx.font="bold 44px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-    const msgGO="GAME OVER"; const wTarget=ctx.measureText(msgGO).width;
-    const leftStr=`SCORE ${score}`; const rightStr=`MULT x${multiplier}`;
-    const wL=ctx.measureText(leftStr).width; const wR=ctx.measureText(rightStr).width;
-    let gap=Math.max(28, wTarget - (wL+wR)) + 16; // fix8.1: widen gap
-    const total=wL+gap+wR; const y=H*0.56;
-    const maxW = Math.floor(W*0.9);
-    if(total>maxW){
-      const sx = maxW/total;
-      ctx.save();
-      ctx.translate(W/2, y);
-      ctx.scale(sx, 1);
-      ctx.textAlign="left";
-      // remeasure not needed when scaled uniformly on X
-      const x0 = - (wL+gap+wR)/2;
-      ctx.fillText(leftStr, x0, 0);
-      ctx.fillText(rightStr, x0 + wL + gap, 0);
-      ctx.restore();
-    }else{
-      const x0=W/2 - total/2;
-      ctx.textAlign="left"; ctx.fillText(leftStr, x0, y); ctx.fillText(rightStr, x0+wL+gap, y);
+  // === SURVIVAL BAR ===
+  if (state !== "title") {
+    const ratio = Math.max(0, Math.min(1, survivalBarMs / SURVIVAL_BAR_MAX_MS));
+    const barW  = W * ratio;
+    const barH  = SURVIVAL_BAR_H;    // 8px を想定
+    const x     = (W - barW) / 2;
+    const y     = H - barH;
+
+    if (barW > 0) {
+      ctx.fillStyle = "#f10";
+      ctx.fillRect(x, y, barW, barH);
     }
-    ctx.textAlign="center";
-    if (runHighBroken) {
-  const blink = ((Math.floor((logicMs/160)) % 2) === 0);
-  if (blink) {
-    // GAME OVER のY位置に追従しつつ、その“上”に出す
-    const GO_Y = H * 0.40;     // GAME OVER のY
-    const HS_Y = GO_Y - 60;    // 上側に60pxぶん（好みで調整可）
-
-    ctx.fillStyle = "#f33";
-    ctx.font = "bold 32px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Boom! New High Score!", W/2, HS_Y);
   }
 }
-    ctx.restore();
+
+// === ORB HEAL (回復量) ===
+const ORB_HEAL_Y_MS = 250;   // 黄 +0.25s
+const ORB_HEAL_O_MS = 500;   // 橙 +0.5s
+
+
+  
+  
+  function drawStartText(){ if(state!=="running") return; const el = startTextUntil - logicMs; if(el<=0) return; ctx.save(); ctx.fillStyle=FG; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.font="700 75px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"; ctx.fillText("LAST SECOND", W/2, H*0.50); ctx.restore(); }
+
+function drawGameOverOverlay(){
+  if(state!=="gameover") return;
+  ctx.save();
+  ctx.textAlign="center";
+  ctx.fillStyle=FG;
+
+  // タイトル
+  ctx.font="900 88px system-ui, Arial Black, Impact, sans-serif";
+  ctx.fillText("GAME OVER", W/2, H*0.40);
+
+  // TIME と BEST をセンターで表示
+  const tStr = fmtTime(runTimeFinalMs) + "s";
+  const bStr = fmtTime(bestTimeMs)     + "s";
+
+  ctx.font="bold 44px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+  ctx.fillText(`TIME  ${tStr}`, W/2, H*0.55);
+  ctx.fillText(`BEST  ${bStr}`, W/2, H*0.62);
+
+  // ベスト更新の点滅メッセージ
+  if (timeBestBroken) {
+    const blink = ((Math.floor((logicMs/160)) % 2) === 0);
+    if (blink) {
+      ctx.fillStyle = "#f10";
+      ctx.font = "bold 32px system-ui, sans-serif";
+      ctx.fillText("Boom! Record broken!", W/2, H*0.32);
+    }
   }
+
+  ctx.restore();
+}
+
 
   function drawTitle(){
     ctx.fillStyle=BG; ctx.fillRect(0,0,W,H); ctx.fillStyle=FG; ctx.textBaseline="top"; ctx.textAlign="left";
     ctx.font="bold 18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
-    ctx.fillText(`PREVIOUS: ${prevScore}  (x${Math.max(1,prevMult)})`,12,10);
-    ctx.textAlign="right"; ctx.fillText(`HIGH: ${highScore} (x${Math.max(1,highMult)})`, W-10, 10);
+    ctx.textAlign="left";  ctx.fillText(`PREV: ${fmtTime(prevTimeMs)}s`, 12, 10);
+    ctx.textAlign="right"; ctx.fillText(`BEST: ${fmtTime(bestTimeMs)}s`, W-10, 10);
     ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.font="900 100px system-ui, Arial Black, Impact, sans-serif";
     ctx.lineWidth=2; ctx.strokeStyle=FG;
     const TITLE_Y = H/2 - 30;
@@ -2105,14 +2139,22 @@ function drawOrbs(){
 
   /*** ===== Entities ===== ***/
   const player={ x:W/2, y:H-PLAYER_BOTTOM_MARGIN,
-    get bbox(){ const w=PLAYER_BASE*PLAYER_HIT_SCALE, h=PLAYER_HEIGHT*PLAYER_HIT_SCALE; return {x:this.x-w/2,y:this.y-h,w,h}; },
+    get bbox(){ const w=PLAYER_BASE*PLAYER_HIT_SCALE, h=PLAYER_HEIGHT*PLAYER_HIT_SCALE; return {x:this.x-w/2, y:this.y-h-PLAYER_HIT_Y_OFFSET, w, h}; },
     get shieldCenter(){ return { cx:this.x, cy:this.y-PLAYER_HEIGHT*0.5 + SHIELD_CENTER_OFFSET_Y }; } };
 
   // ====== ロジック更新（60Hz固定） ======
   function update(dt, tMs){
     if (state === "running") {
       diffMs = FURY_MODE ? DIFF_TOTAL : (diffMs + dt*1000);
-    }
+      // ★ add: survival timer advance
+      runTimeMs += dt * 1000;
+  // 10秒カウントダウン
+  survivalBarMs -= dt * 1000;
+  if (survivalBarMs <= 0 && state === "running") {
+    survivalBarMs = 0;
+    state = "gameover";
+    onGameOver();
+  }  }
 
 
     // v2.7 Fix2 G5: advance background only during gameplay
@@ -2185,31 +2227,35 @@ function drawOrbs(){
         else { if(e.level>1){ e.level-=1; SFX.hit(); } else { killEnemy(i,"red", tMs); } } }
     }
 
-    const pb=player.bbox;
-    for(let i=orbs.length-1;i>=0;i--){
-  const o=orbs[i];
-  if(circleRectOverlap(o.x,o.y,o.r * ORB_HIT_SCALE, pb.x,pb.y,pb.w,pb.h)){
-      const before = multiplier;
-      multiplier += (o.val || 1);
-      const prevDec = Math.floor(before / 10);
-      const nowDec  = Math.floor(multiplier / 10);
-      if (nowDec > prevDec) {
-        const milestone = nowDec * 10;
-        SFX.mult10();
-        triggerTopPopup(`x${milestone}`, "#0af");
-      }
-    if ((o.val || 1) >= 2) {
-    SFX.pickOrange();   // オレンジ（倍率+2想定）用
-    } else {
-    SFX.pickYellow();   // 黄（倍率+1）用
-    }
-    orbs.splice(i,1);
+const pb = player.bbox;
+for (let i = orbs.length - 1; i >= 0; i--) {
+  const o = orbs[i];
+  if (circleRectOverlap(o.x, o.y, o.r * ORB_HIT_SCALE, pb.x, pb.y, pb.w, pb.h)) {
+    const isOrange = ((o.val || 1) >= 2);  // 既存の val: 1=黄, 2=橙 相当
+    // SE
+    if (isOrange) { SFX.pickOrange(); } else { SFX.pickYellow(); }
+
+    // ★ 回復：上限までクランプ
+    const addMs = isOrange ? ORB_HEAL_O_MS : ORB_HEAL_Y_MS;
+    survivalBarMs = Math.min(SURVIVAL_BAR_MAX_MS, survivalBarMs + addMs);
+
+    // 取得で消去
+    orbs.splice(i, 1);
   }
 }
+
+
 
     for(const f of frags){ if(circleRectOverlap(f.x,f.y,f.r,pb.x,pb.y,pb.w,pb.h)){ state="gameover"; onGameOver(); break; } }
     if(state==="running"){ for(const e of enemies){ const col=(e.type==="A")?rectOverlap(pb,{x:e.x,y:e.y,w:e.diag,h:e.diag}):circleRectOverlap(e.cx,e.cy,e.r,pb.x,pb.y,pb.w,pb.h); if(col){ state="gameover"; onGameOver(); break; } } }
   }
+
+    // === SURVIVAL BAR (10s countdown) ===
+    const SURVIVAL_BAR_MAX_MS = 10000; // 10秒
+    const SURVIVAL_BAR_H = 8;          // 高さ8px
+    let survivalBarMs = SURVIVAL_BAR_MAX_MS;
+
+
 
   function drawHUDandScene(){
     // v2.7 Fix2 G5: show background in all non-title states; paused/GO keep last frame
@@ -2271,10 +2317,6 @@ function drawOrbs(){
     else
       orbs.push({x:cx,y:cy,r:ORB_R,vy:ORB_VY,color:YELLOW,val:1});
 
-    score += base*e.spawnLevel*multiplier * ((cause==="cyan"||cause==="purple") ? 2 : 1);
-    if(!runHighBroken && score>highScore){
-      runHighBroken=true; SFX.newHigh(); triggerTopPopup("High Score Crushed!", "#f33");
-    }
     enemies.splice(i,1);
   }
 
@@ -2337,30 +2379,41 @@ f.life = Math.min(Math.max(f.life, CYAN_MIN_LIFE), (typeof FRAG_LIFETIME!=='unde
   }
 
   /*** ===== State transitions ===== ***/
-  function onGameOver(){
-    BGM.stop();
+function onGameOver(){
+  BGM.stop();
 
-    const isNewHigh = score>highScore; prevScore=score; prevMult=multiplier;
-    saveNum(PS_KEY, prevScore);
-    saveNum(PM_KEY, prevMult);
+  runTimeFinalMs = runTimeMs;
 
-    if(isNewHigh){
-      highScore = score; highMult = multiplier;
-      saveNum(HS_KEY, highScore);
-      saveNum(HM_KEY, highMult);
-      runHighBroken = true;
-    }
-    blockGameOverInputUntil = logicMs + 1000;
-    SFX.gameOverBoom();
+  prevTimeMs = runTimeFinalMs;
+  saveMs(TIME_PREV_KEY, prevTimeMs);
+
+  if (runTimeFinalMs > bestTimeMs) {
+    bestTimeMs = runTimeFinalMs;
+    saveMs(TIME_BEST_KEY, bestTimeMs);
+    timeBestBroken = true;
+    try { SFX.newHigh(); } catch(_){}
   }
 
+  blockGameOverInputUntil = logicMs + 1000;
+  SFX.gameOverBoom();
+}
+
+
   function resetRunData(){
-    score=0; multiplier=1; runHighBroken=false;
+    score=0; multiplier=1; timeBestBroken = false;
     bullets.length=enemies.length=frags.length=orbs.length=0; delayedSpawns.length=0;
     lastFireAt=lastSpawnAAt=lastSpawnBAt=lastSpawnCAt=0;
     lastReflectAt=-99999; shieldActiveUntil=0; diffMs=0; logicMs=0; accum=0;
+    survivalBarMs = SURVIVAL_BAR_MAX_MS;
+
+    // ★ add:
+    runTimeMs = 0;
+    runTimeFinalMs = 0;
+    timeBestBroken = false;
+    
     player.x=W/2; multPopup=null;
   }
+
   function startRun(){
     BGM.start();
 
@@ -2395,6 +2448,7 @@ f.life = Math.min(Math.max(f.life, CYAN_MIN_LIFE), (typeof FRAG_LIFETIME!=='unde
   function togglePause(){ (state==="running")?pauseGame(): (state==="paused")&&resumeGame(); }
 
   function tryReflect(){
+    if (state !== "running") return;
     if(logicMs-lastReflectAt>=SHIELD_COOLDOWN){
       lastReflectAt=logicMs; shieldActiveUntil=logicMs+SHIELD_DURATION;
       SFX.shield();
@@ -2448,15 +2502,10 @@ if (e.code === "ArrowRight") { _setDown("right"); e.preventDefault(); }
   }
 
   // 反射
-  if (state === "running" && e.code === "KeyZ" || e.code === "ArrowUp") { tryReflect(); }
-
-addEventListener("keydown", (e) => {
-  if (e.repeat) return;
-  if (e.code === "ArrowUp") {
+  if (state === "running" && (e.code === "KeyZ" || e.code === "ArrowUp")) {
     e.preventDefault();
-    tryReflect(); 
+    tryReflect();
   }
-}, { passive:false });
 
  // ---- Game Over ----
   if (state === "gameover") {
