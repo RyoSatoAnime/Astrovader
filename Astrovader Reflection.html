@@ -121,7 +121,7 @@
   font-weight:900;
 }
 
-:root{ --astro-version: "Reflection v1.0.1"; }  /* バージョン */
+:root{ --astro-version: "Reflection v1.0.2"; }  /* バージョン */
 
 #howtoOverlay .howto-panel{
   position: relative !important;
@@ -1236,20 +1236,22 @@ function rebuildAllSteps(){
     <div class="spacer" aria-hidden="true"></div>
     <div class="howto-panel" role="document">
       <h2 class="howto-title en">Strafe. Reflect. Collect orbs.</h2>
-      <pre class="howto-pre en">Move with ← →
-Reflect with Z key·↑ / R button, 1s Recharge
+      <pre class="howto-pre en">
+Move: ← →, Reflect: Z key or ↑ / R button
+Reflect takes 1s to recharge.
 Reflected kills: 2× score, 1-hit, chainable
 Orbs raise multiplier: Yellow +1 / Orange +2
-Asteroids have levels (1–3). 
-Higher level = Stronger and higher scoring.</pre>
+Asteroids have levels (1–2). 
+Level 2 : ×2 Durability / Counter / Score</pre>
 
       <h2 class="howto-title ja">回避・反射・オーブ回収</h2>
-      <pre class="howto-pre ja">← → で移動
-Z·↑(PC) / R(モバイル) で反射（再装填1秒）
-反射撃破：得点2倍・全敵一撃・連鎖可
-オーブ取得で倍率UP → 黄 +1 / オレンジ +2
-隕石にはレベル(1～3)があり
-上がるほど耐久・反撃・得点が増加</pre>
+      <pre class="howto-pre ja">
+移動：← →　反射：Z・↑(PC)／R(モバイル)
+反射は再装填に１秒
+反射撃破：得点２倍・全敵一撃・連鎖可
+オーブ取得で倍率UP → 黄 + 1 /オレンジ + 1 
+隕石にはレベル(１・２)があり
+レベル２は耐久・反撃・得点が2倍</pre>
 
       <div class="howto-footer">Click / Tap to go back</div>
     </div>
@@ -1310,7 +1312,8 @@ function fragHitsEnemy(f){ return f.c===CYAN || f.c===MAGENTA; }
 function fragHitsPlayer(f){ return f.c===RED || f.c===MAGENTA; }
 
 
-  const PLAYER_BASE=35, PLAYER_HEIGHT=45, PLAYER_SPEED=260, PLAYER_BOTTOM_MARGIN=24, PLAYER_HIT_SCALE=0.6;
+  const PLAYER_BASE=35, PLAYER_HEIGHT=45, PLAYER_SPEED=260, PLAYER_BOTTOM_MARGIN=24, PLAYER_HIT_SCALE=0.5;
+  const PLAYER_HIT_Y_OFFSET = 4;
   const BULLET_W=4, BULLET_H=14, BULLET_SPEED=520, FIRE_DELAY=225;
 
   const A_SIDE=35, A_DIAG=A_SIDE*Math.SQRT2, A_MIN_SPD=120, A_MAX_SPD=180;
@@ -1451,7 +1454,7 @@ function drawBackground(){
   const FIXED_DT = 1/60; // 60Hz
   const SHIELD_FRAMES = 8;
   const SHIELD_DURATION = SHIELD_FRAMES * FIXED_DT * 1000;  // ≈133ms
-  const SHIELD_PUSH=0.75;
+  const SHIELD_PUSH=2.00;
 
   // 角度テーブル：通常/フル
   const ANG_A_FULL=[0,90,180,270], ANG_A_REDUCED=[270];
@@ -1789,9 +1792,13 @@ function hold(btn, onDown, onUp){
     const end=()=> onUp();
     btn.addEventListener("pointerup", end); btn.addEventListener("pointercancel", end); btn.addEventListener("pointerleave", end);
   }
+
   hold(btnLeft,  ()=> _setDown("left"),  ()=> _setUp("left"));
   hold(btnRight, ()=> _setDown("right"), ()=> _setUp("right"));
-  btnReflect.addEventListener("pointerdown", e=>{ e.preventDefault(); SFX.unlock(); tryReflect(); });
+  btnReflect.addEventListener("pointerdown", e=>{
+    e.preventDefault(); SFX.unlock();
+    if (state === "running") tryReflect();
+  });
 
   const canvasEl=document.getElementById("game");
   function focusGame(){ try { canvasEl.focus({ preventScroll: true }); } catch(_){} }
@@ -1890,7 +1897,12 @@ function drawReflectButton(){
   const diffP = ()=> Math.max(0, Math.min(1, diffMs/DIFF_TOTAL));
   function spawnScale(){ return 1 + 2*diffP(); }
   function intervalFor(type){ const base=(type==="A")?A_BASE_INTERVAL:(type==="B")?B_BASE_INTERVAL:C_BASE_INTERVAL; return base / spawnScale(); }
-  function levelForType(type){ const p=diffP(), d=LV_DELAY[type], pt=(p<=d)?0: (p-d)/(1-d); return pt>=0.85?3: pt>=0.5?2: 1; }
+  function levelForType(type){
+  const p = diffP(), d = LV_DELAY[type];
+  const pt = (p <= d) ? 0 : (p - d) / (1 - d);
+  return pt >= 0.5 ? 2 : 1;  // ← 3への分岐を削除
+}
+
   function speedFactor(){ return 1 + 0.5*diffP(); }
 
   /*** ===== Drawing ===== ***/
@@ -2109,7 +2121,7 @@ function drawOrbs(){
 
   /*** ===== Entities ===== ***/
   const player={ x:W/2, y:H-PLAYER_BOTTOM_MARGIN,
-    get bbox(){ const w=PLAYER_BASE*PLAYER_HIT_SCALE, h=PLAYER_HEIGHT*PLAYER_HIT_SCALE; return {x:this.x-w/2,y:this.y-h,w,h}; },
+    get bbox(){ const w=PLAYER_BASE*PLAYER_HIT_SCALE, h=PLAYER_HEIGHT*PLAYER_HIT_SCALE; return {x:this.x-w/2, y:this.y-h-PLAYER_HIT_Y_OFFSET, w, h}; },
     get shieldCenter(){ return { cx:this.x, cy:this.y-PLAYER_HEIGHT*0.5 + SHIELD_CENTER_OFFSET_Y }; } };
 
   // ====== ロジック更新（60Hz固定） ======
@@ -2246,9 +2258,9 @@ function drawOrbs(){
     bullets.push({x:player.x-2, y:player.y-PLAYER_HEIGHT-14, w:4, h:14, vy:-BULLET_SPEED}); }
 
   function spawnFragsNow(cx,cy,angles,color){
-   const speed = FRAG_SPEED * FRAG_SPEED_SCALE; // 全弾この速度
-   for (const deg of angles){
-     const rad = deg2rad(deg), vx = speed*Math.cos(rad), vy = -speed*Math.sin(rad);      frags.push({x:cx,y:cy,r:FRAG_R,vx,vy,life:FRAG_LIFETIME,c:color});
+    for(const deg of angles){
+      const rad=deg2rad(deg), vx=FRAG_SPEED*Math.cos(rad), vy=-FRAG_SPEED*Math.sin(rad);
+      frags.push({x:cx,y:cy,r:FRAG_R,vx,vy,life:FRAG_LIFETIME,c:color});
     }
   }
   function scheduleFrags(cx,cy,angles,color,count,startAtMs){
@@ -2306,7 +2318,7 @@ function applyProactiveShooting(e, tMs){
     if (tMs - lastSpawnAAt < intervalFor("A") / A_RATE) return;  // 間隔を1/0.85倍に
     lastSpawnAAt = tMs;
     const diag=A_DIAG, x=Math.floor(rand(0,W-diag)), y=-diag-2, vy=rand(A_MIN_SPD,A_MAX_SPD); const lv=levelForType("A");
-    enemies.push({type:"A", x,y, diag,vy, level:lv, spawnLevel:lv, fireY: rand(0, H*0.33), fired:false }); SFX.spawn();
+    enemies.push({type:"A", x,y, diag,vy, level:lv, spawnLevel:lv, fireY: rand(0, H*0.40), fired:false }); SFX.spawn();
   }
   function spawnB(tMs){
     if(tMs-lastSpawnBAt<intervalFor("B")) return; lastSpawnBAt=tMs;
@@ -2324,7 +2336,7 @@ function enemyAutoFire(tMs){
   for(const e of enemies){
     if(e.type==="A"){
       // 上から33%内を通過中に1回だけ
-      if(!e.fired && e.y>=0 && e.y<=H*0.33 && e.y>=e.fireY){
+      if(!e.fired && e.y>=0 && e.y<=H*0.40 && e.y>=e.fireY){
         const cx=e.x+e.diag/2, cy=e.y+e.diag/2;
         spawnFragsNow(cx,cy, ANG_A_REDUCED, RED);
         e.fired = true;
@@ -2491,6 +2503,7 @@ f.life = Math.min(Math.max(f.life, CYAN_MIN_LIFE), (typeof FRAG_LIFETIME!=='unde
   function togglePause(){ (state==="running")?pauseGame(): (state==="paused")&&resumeGame(); }
 
   function tryReflect(){
+    if (state !== "running") return;
     if(logicMs-lastReflectAt>=SHIELD_COOLDOWN){
       lastReflectAt=logicMs; shieldActiveUntil=logicMs+SHIELD_DURATION;
       SFX.shield();
@@ -2544,15 +2557,11 @@ if (e.code === "ArrowRight") { _setDown("right"); e.preventDefault(); }
   }
 
   // 反射
-  if (state === "running" && e.code === "KeyZ" || e.code === "ArrowUp") { tryReflect(); }
-
-addEventListener("keydown", (e) => {
-  if (e.repeat) return;
-  if (e.code === "ArrowUp") {
+  if (state === "running" && (e.code === "KeyZ" || e.code === "ArrowUp")) {
     e.preventDefault();
-    tryReflect(); 
+    tryReflect();
   }
-}, { passive:false });
+
 
  // ---- Game Over ----
   if (state === "gameover") {
