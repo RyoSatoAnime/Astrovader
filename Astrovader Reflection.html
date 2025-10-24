@@ -1568,7 +1568,7 @@ const pad6 = n => n.toString().padStart(6,"0");
       const ns=AC.createBufferSource(); ns.buffer=nb; const hp=AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=800; const nG=AC.createGain(); nG.gain.setValueAtTime(0.0, t0); nG.gain.linearRampToValueAtTime(0.18, t0+T*0.9);
       ns.connect(hp).connect(nG);
       const ws=AC.createWaveShaper(); const curve=new Float32Array(256); for(let i=0;i<256;i++){ const x=i/128-1; curve[i]=Math.tanh(1.4*x);} ws.curve=curve; ws.oversample="4x";
-      const mix = AC.createGain(); mix.gain.setValueAtTime(0.36, t0);
+      const mix = AC.createGain(); mix.gain.setValueAtTime(0.26, t0);
       tri.connect(triGain).connect(ws); sq.connect(sqGain).connect(ws); nG.connect(ws); ws.connect(mix).connect(AC.destination);
       tri.start(t0); sq.start(t0); lfo.start(t0); ns.start(t0); tri.stop(t0+T); sq.stop(t0+T); lfo.stop(t0+T); ns.stop(t0+T);
     }
@@ -1602,7 +1602,7 @@ const pad6 = n => n.toString().padStart(6,"0");
         const crack = whiteNoise(0.18);
         const hp = AC.createBiquadFilter(); hp.type="highpass"; hp.frequency.setValueAtTime(4200, t);
         hp.frequency.exponentialRampToValueAtTime(1800, t + 0.12);
-        const gC = AC.createGain(); gC.gain.setValueAtTime(0.1, t);
+        const gC = AC.createGain(); gC.gain.setValueAtTime(0.05, t);
         gC.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
         crack.connect(hp).connect(gC).connect(AC.destination);
         crack.start(t); crack.stop(t + 0.18);
@@ -1616,7 +1616,7 @@ const pad6 = n => n.toString().padStart(6,"0");
         lp.frequency.exponentialRampToValueAtTime(90, t + dur);
 
         const sh = AC.createWaveShaper(); sh.curve = makeDistCurve(1.1);
-        const g = AC.createGain(); g.gain.setValueAtTime(0.13, t);
+        const g = AC.createGain(); g.gain.setValueAtTime(0.07, t);
         g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
 
         src.connect(lp).connect(sh).connect(g).connect(AC.destination);
