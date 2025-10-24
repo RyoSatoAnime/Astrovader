@@ -121,13 +121,37 @@
   font-weight:900;
 }
 
-:root{ --astro-version: "Reflection v1.0.2"; }  /* バージョン */
+:root{
+  --astro-version: "v1.1.0"; /* バージョン */
+  --astro-xinput: "XInput supported";
+}
 
 #howtoOverlay .howto-panel{
   position: relative !important;
   overflow: visible !important;
 }
 
+/* 左詰め：XInput */
+#howtoOverlay .howto-panel::before{
+  content: var(--astro-xinput);
+  position: absolute;
+  left: 8px;
+  bottom: -18px;
+  display: block;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+  opacity: .6;
+  pointer-events: none;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  z-index: 1;
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* 右詰め：バージョン */
 #howtoOverlay .howto-panel::after{
   content: var(--astro-version);
   position: absolute;
@@ -1119,8 +1143,6 @@ function rebuildAllSteps(){
     
   }
 
-  // UI bindings else stop(); }); if(MASTER) MASTER.gain.value = parseFloat( }); }); }); }); }); }); }); });
-
 
     // Public API
     function play(startAtStep){ 
@@ -1262,20 +1284,7 @@ Level 2 : ×2 Durability / Counter / Score</pre>
 
 
 <script>
-const CYAN_MIN_LIFE = 3.0; // minimum remaining life (s) guaranteed on red->cyan reflection
-
-
-    // --- input debounce guard (added in fix8) ---
-    function inputAllowedNow(){
-      try{
-        if (typeof blockGameOverInputUntil !== "undefined" && typeof logicMs !== "undefined"){
-          return logicMs >= blockGameOverInputUntil;
-        }
-      }catch(e){}
-      return true;
-    }
-    // --- end guard ---
-    
+const CYAN_MIN_LIFE = 3.0; // minimum remaining life (s) guaranteed on red->cyan reflection    
 
         
         
@@ -1795,8 +1804,10 @@ function hold(btn, onDown, onUp){
 
   hold(btnLeft,  ()=> _setDown("left"),  ()=> _setUp("left"));
   hold(btnRight, ()=> _setDown("right"), ()=> _setUp("right"));
+  /* Guard reflect on mobile/PC: only when state === "running" */
   btnReflect.addEventListener("pointerdown", e=>{
-    e.preventDefault(); SFX.unlock();
+    e.preventDefault();
+    SFX.unlock();
     if (state === "running") tryReflect();
   });
 
@@ -2191,8 +2202,14 @@ function drawOrbs(){
 
     for(let i=enemies.length-1;i>=0;i--){
       const e=enemies[i]; let idx=-1;
-      if(e.type==="A"){ const er={x:e.x,y:e.y,w:e.diag,h:e.diag};
-        for(let k=frags.length-1;k>=0;k--){ const f=frags[k]; if (f.c===RED) continue; if(!fragHitsEnemy(f)) continue; if(circleRectOverlap(f.x,f.y,f.r,er.x,er.y,er.w,er.h)){ idx=k; break; } } }
+      if (e.type === "A"){
+        // avoid per-iteration object allocation
+        const ex = e.x, ey = e.y, ew = e.diag, eh = e.diag;
+        for (let k=frags.length-1; k>=0; k--){
+          const f = frags[k];
+          if (circleRectOverlap(f.x, f.y, f.r, ex, ey, ew, eh)){ idx = k; break; }
+        }
+      }
       else{ for(let k=frags.length-1;k>=0;k--){ const f=frags[k]; if (f.c===RED) continue; if(circleCircleOverlap(f.x,f.y,f.r,e.cx,e.cy,e.r)){ idx=k; break; } } }
       if(idx!==-1){
         const c = frags[idx].c;
@@ -2241,7 +2258,20 @@ function drawOrbs(){
  　　   state="gameover"; onGameOver(); break;
 　　  }
 　　}
-    if(state==="running"){ for(const e of enemies){ const col=(e.type==="A")?rectOverlap(pb,{x:e.x,y:e.y,w:e.diag,h:e.diag}):circleRectOverlap(e.cx,e.cy,e.r,pb.x,pb.y,pb.w,pb.h); if(col){ state="gameover"; onGameOver(); break; } } }
+     if (state === "running"){
+      for (const e of enemies){
+        let col = false;
+        if (e.type === "A"){
+          // inline rect-rect overlap to avoid temporary object
+          const ex = e.x, ey = e.y, ew = e.diag, eh = e.diag;
+          col = (pb.x < ex + ew) && (pb.x + pb.w > ex) && (pb.y < ey + eh) && (pb.y + pb.h > ey);
+        } else {
+          // circle (enemy) vs rect (player)
+          col = circleRectOverlap(e.cx, e.cy, e.r, pb.x, pb.y, pb.w, pb.h);
+        }
+        if (col){ state = "gameover"; onGameOver(); break; }
+      }
+    }
   }
 
   function drawHUDandScene(){
@@ -2381,7 +2411,7 @@ function enemyAutoFire(tMs){
 
     score += base*e.spawnLevel*multiplier * ((cause==="cyan") ? 2 : 1);
     if(!runHighBroken && score>highScore){
-      runHighBroken=true; SFX.newHigh(); triggerTopPopup("High Score Crushed!", "#f33");
+      runHighBroken=true; SFX.newHigh(); triggerTopPopup("Record broken!", "#f33");
     }
     enemies.splice(i,1);
   }
@@ -2391,6 +2421,9 @@ function enemyAutoFire(tMs){
     const SHIELD_GRACE_MS = 10; // 0にすれば従来通り
     if (state!=="running") return;
     if (tMs >= shieldActiveUntil + SHIELD_GRACE_MS) return;
+    let hasReflectables = false;
+    for (let i=0;i<frags.length;i++){ const c=frags[i].c; if (c===RED || c===MAGENTA){ hasReflectables=true; break; } }
+    if (!hasReflectables) return;
     const {cx,cy}=player.shieldCenter; const R=SHIELD_RADIUS;
     const EPS=0.1;
 
@@ -2522,6 +2555,213 @@ f.life = Math.min(Math.max(f.life, CYAN_MIN_LIFE), (typeof FRAG_LIFETIME!=='unde
     if (k==="Enter" && (codes.has("Enter"))) return true;
     return false;
   }
+  
+  /* =========================
+   Gamepad — 寛容マッピング + 診断ログ版
+   Replace previous Gamepad block with this.
+   Toggle debug by setting `window.GP_DEBUG = true` (open DevTools → Console → type it) then reload.
+   ========================= */
+
+(function(){
+  if (!('getGamepads' in navigator)) return;
+
+  // DEBUG can be toggled by setting window.GP_DEBUG = true before reload,
+  // or set it in console and then interact — some runtime logs still appear.
+  const DEBUG = !!window.GP_DEBUG;
+  const BTN = {
+    A: 0, B: 1, X: 2, Y: 3,
+    LB: 4, RB: 5, LT: 6, RT: 7,
+    BACK: 8, START: 9,
+    LS: 10, RS: 11,
+    DP_UP: 12, DP_DOWN: 13, DP_LEFT: 14, DP_RIGHT: 15
+  };
+  const AX = { L_X: 0, L_Y: 1 };
+  const AXIS_THRESHOLD = 0.45;
+
+  let prevButtons = {};   // keyed by gamepad.index -> array of bools
+  let rafPoll = null;
+  let firstSeen = {};     // to print diagnostic per index once
+
+  function log(...args){ if (DEBUG) console.debug('[GPD]', ...args); }
+
+  // helper: synth key
+  function synthKey(code){
+    try{
+      const kd = new KeyboardEvent('keydown', {code: code, key: code === 'Space' ? ' ' : undefined, bubbles:true, cancelable:true});
+      document.dispatchEvent(kd);
+      setTimeout(()=>{
+        const ku = new KeyboardEvent('keyup', {code: code, key: code === 'Space' ? ' ' : undefined, bubbles:true, cancelable:true});
+        document.dispatchEvent(ku);
+      }, 8);
+    }catch(e){ log('synthKey err', e); }
+  }
+
+  // try flexible music toggle
+  function toggleMusicViaBGM(){
+    try{
+      if (typeof window.toggleMusic === 'function'){ window.toggleMusic(); return; }
+      if (typeof window.BGM !== 'undefined'){
+        if (typeof BGM.toggle === 'function'){ BGM.toggle(); return; }
+        if (typeof BGM.setGlobalMute === 'function'){
+          const cur = (typeof BGM.muted !== 'undefined') ? !!BGM.muted : (typeof BGM.getGlobalMute === 'function' ? !!BGM.getGlobalMute() : false);
+          BGM.setGlobalMute(!cur);
+          if (typeof BGM.muted !== 'undefined') BGM.muted = !cur;
+          return;
+        }
+        if (typeof BGM.muted !== 'undefined'){
+          BGM.muted = !BGM.muted;
+          if (typeof BGM.setMute === 'function') BGM.setMute(BGM.muted);
+          if (typeof BGM.setPaused === 'function') BGM.setPaused(BGM.muted);
+          return;
+        }
+      }
+      // fallback to KeyM
+      const ev = new KeyboardEvent('keydown', {code:'KeyM', key:'m', bubbles:true});
+      document.dispatchEvent(ev);
+    }catch(e){ log('toggleMusic err', e); }
+  }
+
+  // Universal handlers: we accept a range of button indices for reflect/music/sfx
+  const REFLECT_CANDIDATES = [0,1]; // A,B usually
+  const MUSIC_CANDIDATES = [2];       // prefer X (2) but we'll also accept 0..3 if needed
+  const SFX_CANDIDATES   = [3];       // Y usually
+
+  function handleButtonDown(index, btnIdx){
+    log('btnDown', index, btnIdx);
+
+    // If index is in reflect candidates -> reflect
+    if (REFLECT_CANDIDATES.indexOf(btnIdx) >= 0){
+      try{ if (state === "running") tryReflect(); }catch(e){ log('reflect err', e); }
+      return;
+    }
+
+    // If exactly matches MUSIC_CANDIDATES OR if it's in 0..3 but not START/BACK -> treat as possible music
+    if (MUSIC_CANDIDATES.indexOf(btnIdx) >= 0 || (btnIdx >=0 && btnIdx <=3 && btnIdx === 2)){
+      try{ toggleMusicViaBGM(); if (typeof syncMuteUI === 'function') syncMuteUI(); }catch(e){ log('music err', e); }
+      return;
+    }
+
+    // SFX toggle (Y)
+    if (SFX_CANDIDATES.indexOf(btnIdx) >= 0 || btnIdx === 3){
+      try{ SFX.toggle(); if (typeof BGM !== 'undefined' && typeof BGM.setGlobalMute === 'function') BGM.setGlobalMute(SFX.muted); if (typeof syncMuteUI === 'function') syncMuteUI(); }catch(e){ log('sfx err', e); }
+      return;
+    }
+
+    // Start
+    if (btnIdx === BTN.START){
+      try{ synthKey('Space'); }catch(e){ log('start err', e); }
+      return;
+    }
+
+    // Back -> HowTo
+    if (btnIdx === BTN.BACK){
+      try{
+        const b = document.getElementById('btnHowto');
+        if (b) b.click();
+        else if (typeof showHowTo === 'function') showHowTo();
+      }catch(e){ log('back err', e); }
+      return;
+    }
+
+    // If it's DPad left/right standard indices, ignore here because axes handler covers movement.
+    // For non-standard controllers there may be extra buttons; we intentionally ignore them to keep "それ以外無効" の要件。
+  }
+
+  function handleButtonUp(index, btnIdx){
+    log('btnUp', index, btnIdx);
+  }
+
+  function resetPrevButtons(){
+    prevButtons = {};
+    log('prevButtons reset');
+  }
+
+  function pollGamepads(){
+    const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+
+    for (let i = 0; i < gps.length; i++){
+      const gp = gps[i];
+      if (!gp) continue;
+      const idx = (gp.index != null) ? gp.index : i;
+
+      // diagnostic print once per device
+      if (!firstSeen[idx]){
+        firstSeen[idx] = true;
+        log('Gamepad', idx, 'id:', gp.id, 'mapping:', gp.mapping, 'buttons:', gp.buttons.length, 'axes:', gp.axes.length);
+        // also print full buttons pressed state snapshot for diagnosis
+        if (DEBUG) console.log('[GPD] full gamepad object:', gp);
+      }
+
+      // ensure prev array exists and matches length
+      if (!prevButtons[idx] || prevButtons[idx].length !== gp.buttons.length){
+        prevButtons[idx] = new Array(gp.buttons.length).fill(false);
+        log('init prevButtons for', idx, 'len', gp.buttons.length);
+      }
+
+      // buttons
+      for (let b = 0; b < gp.buttons.length; b++){
+        const pressed = !!gp.buttons[b].pressed;
+        const prev = !!prevButtons[idx][b];
+        if (pressed && !prev){ handleButtonDown(idx, b); }
+        else if (!pressed && prev){ handleButtonUp(idx, b); }
+        prevButtons[idx][b] = pressed;
+      }
+
+      // axes -> left/right
+      const ax = (gp.axes && gp.axes.length > AX.L_X) ? gp.axes[AX.L_X] : 0;
+      // Common DPad indices 14/15, but some controllers may map DPad differently.
+      const dpLeft = !!(gp.buttons[BTN.DP_LEFT] && gp.buttons[BTN.DP_LEFT].pressed);
+      const dpRight = !!(gp.buttons[BTN.DP_RIGHT] && gp.buttons[BTN.DP_RIGHT].pressed);
+
+      let move = 0;
+      if (Math.abs(ax) > AXIS_THRESHOLD) move = (ax < 0 ? -1 : 1);
+      else if (dpLeft || dpRight) move = dpLeft ? -1 : 1;
+      else {
+        // extra fallback: if some button indices are held that look like left/right (rare), ignore for now
+        move = 0;
+      }
+
+      try{
+        if (move === -1){
+          _setDown && _setDown("left");
+          _setUp && _setUp("right");
+        }else if (move === 1){
+          _setDown && _setDown("right");
+          _setUp && _setUp("left");
+        }else{
+          _setUp && _setUp("left");
+          _setUp && _setUp("right");
+        }
+      }catch(e){ log('axis map err', e); }
+    }
+
+    rafPoll = requestAnimationFrame(pollGamepads);
+  }
+
+  function onGamepadConnected(e){
+    log('connected', e && e.gamepad && e.gamepad.index);
+    if (e && e.gamepad && e.gamepad.index != null){
+      prevButtons[e.gamepad.index] = prevButtons[e.gamepad.index] || new Array(e.gamepad.buttons.length).fill(false);
+    }
+  }
+  function onGamepadDisconnected(e){
+    log('disconnected', e && e.gamepad && e.gamepad.index);
+    if (e && e.gamepad && e.gamepad.index != null){
+      delete prevButtons[e.gamepad.index];
+    }
+  }
+
+  document.addEventListener('visibilitychange', ()=>{ if (document.hidden) resetPrevButtons(); else setTimeout(resetPrevButtons,50); });
+  window.addEventListener('blur', resetPrevButtons);
+  window.addEventListener('focus', ()=> setTimeout(resetPrevButtons,50));
+  window.addEventListener("gamepadconnected", onGamepadConnected);
+  window.addEventListener("gamepaddisconnected", onGamepadDisconnected);
+
+  // start polling immediately
+  if (rafPoll === null) rafPoll = requestAnimationFrame(pollGamepads);
+
+})();
+
   
 const TITLE_START_KEYS = new Set(["ArrowLeft","ArrowRight","KeyZ","Enter","ArrowUp","Space"]);
 const RESTART_KEYS     = new Set(["ArrowLeft","ArrowRight","KeyZ","KeyR","Enter","ArrowUp","Space"]);
