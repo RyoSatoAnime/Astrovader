@@ -2844,12 +2844,17 @@ if (e.code === "ArrowRight") { _setDown("right"); e.preventDefault(); }
   let startedOnce = false;
   let tapCount = 0;
 
-  function isMobile(){
-    try{ if (window.matchMedia && matchMedia('(pointer: coarse)').matches) return true; }catch(e){}
-    const ua = (navigator.userAgent||'').toLowerCase();
-    return ('ontouchstart' in window) || /mobi|android|iphone|ipad|ipod|ios/.test(ua);
+function isMobile(){
+    const ua = navigator.userAgent.toLowerCase();
+
+    if (ua.includes("xbox")) {
+       return false;
+    }
+    
+    return /mobile|android|iphone|ipad|ipod|ios/.test(ua);
   }
   const mobile = isMobile();
+
 
   function kickstart(){
     if(startedOnce) return;
